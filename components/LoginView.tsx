@@ -32,10 +32,16 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
     setError('');
     setIsLoading(true);
 
+    if (!username.trim() || !password.trim()) {
+      setError('Preencha todos os campos obrigatórios.');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       if (isRegisterMode) {
-        if (!name || !username || !password) {
-          setError('Preencha todos os campos.');
+        if (!name.trim()) {
+          setError('O nome é obrigatório para cadastro.');
           setIsLoading(false);
           return;
         }
@@ -46,11 +52,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
         if (user) {
           onLogin(user);
         } else {
-          setError('Usuário ou senha incorretos.');
+          setError('Usuário não encontrado ou senha inválida.');
         }
       }
     } catch (err: any) {
-      setError(err.message || 'Erro ao conectar ao servidor.');
+      setError(err.message || 'Erro ao realizar autenticação.');
     } finally {
       setIsLoading(false);
     }
@@ -89,7 +95,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     className="w-full bg-black border border-white/5 rounded-2xl py-4 pl-12 pr-4 text-sm font-bold focus:outline-none focus:border-yellow-500/50 transition-all text-white placeholder:text-zinc-700"
-                    required
+                    required={isRegisterMode}
                   />
                 </div>
               </div>
@@ -155,7 +161,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
           {!databaseEmpty && (
             <div className="mt-6 text-center">
               <button 
-                onClick={() => setIsRegisterMode(!isRegisterMode)}
+                onClick={() => {
+                  setError('');
+                  setIsRegisterMode(!isRegisterMode);
+                }}
                 className="text-[10px] font-black text-zinc-600 uppercase tracking-widest hover:text-yellow-500 transition-colors"
               >
                 {isRegisterMode ? 'Já tenho acesso' : 'Cadastrar novo gerente'}
@@ -165,12 +174,12 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
 
           <div className="mt-8 pt-8 border-t border-white/5 flex items-center justify-center gap-2">
             <ShieldCheck size={14} className="text-zinc-700" />
-            <span className="text-[10px] font-bold text-zinc-700 uppercase tracking-tighter">Servidor em Nuvem Ativo</span>
+            <span className="text-[10px] font-bold text-zinc-700 uppercase tracking-tighter">Servidor Local Ativo</span>
           </div>
         </div>
 
         <p className="mt-8 text-center text-zinc-700 text-[10px] font-black uppercase tracking-[0.2em]">
-          &copy; 2025 SMK Finance Master. Cloud Integrated.
+          &copy; 2025 SMK Finance Master.
         </p>
       </div>
     </div>

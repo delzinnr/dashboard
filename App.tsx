@@ -36,7 +36,7 @@ const App: React.FC = () => {
       setCycles(fetchedCycles);
       setCosts(fetchedCosts);
     } catch (error) {
-      console.error("Erro ao carregar dados do Supabase:", error);
+      console.error("Erro ao carregar dados:", error);
     } finally {
       setIsLoading(false);
     }
@@ -111,7 +111,7 @@ const App: React.FC = () => {
       await db.saveCycle(cycle);
       setCycles(prev => [cycle, ...prev]);
     } catch (err) {
-      alert('Erro ao salvar ciclo no servidor.');
+      alert('Erro ao salvar ciclo.');
     }
     setIsSyncing(false);
   };
@@ -129,7 +129,7 @@ const App: React.FC = () => {
       await db.saveCost(cost);
       setCosts(prev => [cost, ...prev]);
     } catch (err) {
-      alert('Erro ao salvar custo no servidor.');
+      alert('Erro ao salvar custo.');
     }
     setIsSyncing(false);
   };
@@ -163,7 +163,6 @@ const App: React.FC = () => {
       await db.saveUsers(updatedUsers);
       setUsers(updatedUsers);
       
-      // Recalcular comissões nos ciclos se necessário (opcional, dependendo da regra de negócio retroativa)
       const updatedCycles = cycles.map(c => {
         if (c.operatorId === userId) {
           const newCommValue = c.profit > 0 ? (c.profit * (newCommission / 100)) : 0;
@@ -174,7 +173,7 @@ const App: React.FC = () => {
       await db.saveAllCycles(updatedCycles);
       setCycles(updatedCycles);
     } catch (err) {
-      alert('Erro ao atualizar comissão no servidor.');
+      alert('Erro ao atualizar comissão.');
     }
     setIsSyncing(false);
   };
@@ -215,10 +214,12 @@ const App: React.FC = () => {
             setIsSyncing(true);
             try {
               const op: User = { ...u, id: `op-${Date.now()}`, role: 'operator' };
-              await db.saveUsers([op]);
-              setUsers(prev => [...prev, op]);
+              const currentUsers = await db.getUsers();
+              const updatedUsers = [...currentUsers, op];
+              await db.saveUsers(updatedUsers);
+              setUsers(updatedUsers);
             } catch (err) {
-              alert('Erro ao criar operador no servidor.');
+              alert('Erro ao criar operador.');
             }
             setIsSyncing(false);
           }}
@@ -228,7 +229,7 @@ const App: React.FC = () => {
               await db.deleteUser(id);
               setUsers(prev => prev.filter(u => u.id !== id));
             } catch (err) {
-              alert('Erro ao remover operador do servidor.');
+              alert('Erro ao remover operador.');
             }
             setIsSyncing(false);
           }}
