@@ -94,7 +94,6 @@ const App: React.FC = () => {
     reader.readAsText(file);
   };
 
-  // Determinar o ID do Admin responsável por este usuário (seja ele admin ou operador)
   const myAdminId = useMemo(() => {
     if (!currentUser) return '';
     return currentUser.role === 'admin' ? currentUser.id : (currentUser.parentId || '');
@@ -104,12 +103,15 @@ const App: React.FC = () => {
     if (!currentUser || !myAdminId) return;
     setIsSyncing(true);
     try {
-      const profit = newCycle.return - newCycle.invested;
-      const commValue = profit > 0 ? (profit * (currentUser.commission / 100)) : 0;
+      const grossProfit = newCycle.return - newCycle.invested;
+      const commValue = grossProfit > 0 ? (grossProfit * (currentUser.commission / 100)) : 0;
+      // Regra solicitada: Lucro do Operador = Lucro da Operação - Valor da Comissão
+      const netProfit = grossProfit - commValue;
+      
       const cycle: Cycle = {
         ...newCycle,
         id: `c-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-        profit,
+        profit: Number(netProfit.toFixed(2)),
         commissionValue: Number(commValue.toFixed(2)),
         operatorId: currentUser.id,
         operatorName: currentUser.name,
@@ -148,7 +150,7 @@ const App: React.FC = () => {
       await db.deleteCost(id);
       setCosts(prev => prev.filter(c => c.id !== id));
     } catch (err) {
-      alert('Erro ao excluir do servidor.');
+      alert('Erro ao excluir.');
     }
     setIsSyncing(false);
   };
@@ -159,7 +161,7 @@ const App: React.FC = () => {
       await db.deleteCycle(id);
       setCycles(prev => prev.filter(c => c.id !== id));
     } catch (err) {
-      alert('Erro ao excluir do servidor.');
+      alert('Erro ao excluir.');
     }
     setIsSyncing(false);
   };
@@ -175,8 +177,15 @@ const App: React.FC = () => {
       const allCycles = await db.getCycles();
       const updatedAllCycles = allCycles.map(c => {
         if (c.operatorId === userId) {
-          const newCommValue = c.profit > 0 ? (c.profit * (newCommission / 100)) : 0;
-          return { ...c, commissionValue: Number(newCommValue.toFixed(2)) };
+          const grossProfit = c.return - c.invested;
+          const newCommValue = grossProfit > 0 ? (grossProfit * (newCommission / 100)) : 0;
+          // Recalcula lucro líquido baseado na nova comissão
+          const newNetProfit = grossProfit - newCommValue;
+          return { 
+            ...c, 
+            commissionValue: Number(newCommValue.toFixed(2)),
+            profit: Number(newNetProfit.toFixed(2))
+          };
         }
         return c;
       });
@@ -200,7 +209,6 @@ const App: React.FC = () => {
 
   if (!isLoggedIn || !currentUser) return <LoginView users={users} onLogin={handleLogin} />;
 
-  // Filtragem de dados com base no isolamento de Admin
   const filteredCycles = currentUser.role === 'admin' 
     ? cycles.filter(c => c.ownerAdminId === currentUser.id)
     : cycles.filter(c => c.operatorId === currentUser.id);
