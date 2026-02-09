@@ -16,7 +16,9 @@ import {
   Briefcase,
   TrendingDown,
   ArrowDownRight,
-  Layers
+  Layers,
+  BrainCircuit,
+  AlertTriangle
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -89,14 +91,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ cycles, costs, userRole })
   }, [costs, timeframe]);
 
   const stats = useMemo(() => {
-    const adminCycles = filteredCycles.filter(c => c.operatorId === ADMIN_ID);
-    const teamCycles = filteredCycles.filter(c => c.operatorId !== ADMIN_ID);
+    const adminCycles = filteredCycles.filter(c => c.operatorId.includes('admin'));
+    const teamCycles = filteredCycles.filter(c => !c.operatorId.includes('admin'));
 
     const managerPersonalProfit = adminCycles.reduce((acc, c) => acc + c.profit, 0);
     const managementCommission = teamCycles.reduce((acc, c) => acc + c.commissionValue, 0);
     
-    const managerPersonalCosts = filteredCosts.filter(c => c.operatorId === ADMIN_ID).reduce((acc, c) => acc + c.amount, 0);
-    const teamTotalCosts = filteredCosts.filter(c => c.operatorId !== ADMIN_ID).reduce((acc, c) => acc + c.amount, 0);
+    const managerPersonalCosts = filteredCosts.filter(c => c.operatorId.includes('admin')).reduce((acc, c) => acc + c.amount, 0);
+    const teamTotalCosts = filteredCosts.filter(c => !c.operatorId.includes('admin')).reduce((acc, c) => acc + c.amount, 0);
     
     const managerNetEarnings = Number((managerPersonalProfit + managementCommission - managerPersonalCosts).toFixed(2));
 
@@ -113,7 +115,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ cycles, costs, userRole })
     const data: Record<string, { profit: number; costs: number; commission: number }> = {};
     
     filteredCycles.forEach(c => {
-      if (c.operatorId !== ADMIN_ID) {
+      if (!c.operatorId.includes('admin')) {
         if (!data[c.operatorName]) data[c.operatorName] = { profit: 0, costs: 0, commission: 0 };
         data[c.operatorName].profit += c.profit;
         data[c.operatorName].commission += c.commissionValue;
@@ -121,7 +123,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ cycles, costs, userRole })
     });
 
     filteredCosts.forEach(c => {
-      if (c.operatorId !== ADMIN_ID) {
+      if (!c.operatorId.includes('admin')) {
         if (!data[c.operatorName]) data[c.operatorName] = { profit: 0, costs: 0, commission: 0 };
         data[c.operatorName].costs += c.amount;
       }
@@ -132,18 +134,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ cycles, costs, userRole })
       'Lucro Bruto': Number(vals.profit.toFixed(2)),
       'Custos Operador': Number(vals.costs.toFixed(2)),
       'Saldo Operador': Number((vals.commission - vals.costs).toFixed(2))
-    })).sort((a, b) => b['Lucro Bruto'] - a['Lucro Bruto']);
+    })).sort((a, b) => b['Lucro Bruto'] - a['Luced Bruto']);
   }, [filteredCycles, filteredCosts]);
 
   const evolutionData = useMemo(() => {
     const dataByDate: Record<string, number> = {};
     
     filteredCycles.forEach(c => {
-      const gain = c.operatorId === ADMIN_ID ? c.profit : c.commissionValue;
+      const gain = c.operatorId.includes('admin') ? c.profit : c.commissionValue;
       dataByDate[c.date] = (dataByDate[c.date] || 0) + gain;
     });
     
-    filteredCosts.filter(c => c.operatorId === ADMIN_ID).forEach(c => {
+    filteredCosts.filter(c => c.operatorId.includes('admin')).forEach(c => {
       dataByDate[c.date] = (dataByDate[c.date] || 0) - c.amount;
     });
 
@@ -159,17 +161,26 @@ export const Dashboard: React.FC<DashboardProps> = ({ cycles, costs, userRole })
   }, [filteredCycles, filteredCosts]);
 
   const analyzeWithAI = async () => {
+    const key = process.env.API_KEY;
+    if (!key || key === 'YOUR_API_KEY' || key === 'undefined') {
+      setAiInsight("AI Indisponível: Chave de API não configurada no ambiente.");
+      return;
+    }
+
     setIsAnalyzing(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `Analise SMK: O gerente lucrou ${formatBRL(stats.managerNetEarnings)} líquidos. 
-      Comissões de Equipe: ${formatBRL(stats.managementCommission)}. 
-      Lucro Próprio: ${formatBRL(stats.managerPersonalProfit)}. 
-      Gastos da Equipe: ${formatBRL(stats.teamTotalCosts)}. 
-      Responda em 1 frase se a equipe está sendo custosa demais comparado ao lucro bruto gerado para o gerente.`;
-      const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
+      const ai = new GoogleGenAI({ apiKey: key });
+      const prompt = `Analise SMK: O gerente lucrou ${formatBRL(stats.managerNetEarnings)} líquidos. Comissões de Equipe: ${formatBRL(stats.managementCommission)}. Lucro Próprio: ${formatBRL(stats.managerPersonalProfit)}. Gastos da Equipe: ${formatBRL(stats.teamTotalCosts)}. Responda em 1 frase curta se a operação está saudável e o motivo principal.`;
+      const response = await ai.models.generateContent({ 
+        model: 'gemini-3-flash-preview', 
+        contents: prompt 
+      });
       setAiInsight(response.text);
-    } catch (e) { setAiInsight("Erro na análise."); } finally { setIsAnalyzing(false); }
+    } catch (e) { 
+      setAiInsight("Não foi possível gerar análise no momento."); 
+    } finally { 
+      setIsAnalyzing(false); 
+    }
   };
 
   return (
@@ -247,6 +258,32 @@ export const Dashboard: React.FC<DashboardProps> = ({ cycles, costs, userRole })
         )}
       </div>
 
+      {isAdmin && (
+        <div className="bg-[#0c0c0c] rounded-[2.5rem] border border-white/5 p-6 shadow-2xl overflow-hidden relative group">
+          <div className="flex items-center gap-4 mb-4">
+            <div className="p-2 bg-yellow-500/10 rounded-xl text-yellow-500"><BrainCircuit size={20} /></div>
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">SMK Intelligence Analysis</h3>
+          </div>
+          
+          <div className="flex flex-col md:flex-row gap-6 items-center">
+             <button 
+               onClick={analyzeWithAI}
+               disabled={isAnalyzing}
+               className="bg-yellow-500 hover:bg-yellow-400 text-black px-8 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all shadow-xl shadow-yellow-500/20 disabled:opacity-50 shrink-0"
+             >
+               {isAnalyzing ? "Processando..." : "Gerar Insight de Gestão"}
+             </button>
+             
+             {aiInsight && (
+               <div className="flex items-start gap-3 bg-white/[0.03] p-4 rounded-2xl border border-white/5 animate-in slide-in-from-left-4">
+                 <Sparkles className="text-yellow-500 shrink-0" size={16} />
+                 <p className="text-sm font-medium text-zinc-300 italic">"{aiInsight}"</p>
+               </div>
+             )}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="bg-[#0c0c0c] rounded-[3rem] p-10 border border-white/5 shadow-2xl">
           <div className="flex items-center justify-between mb-10">
@@ -292,54 +329,32 @@ export const Dashboard: React.FC<DashboardProps> = ({ cycles, costs, userRole })
               </div>
             </div>
             <div className="h-[350px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={teamPerformanceData} margin={{ left: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" vertical={false} />
-                  <XAxis dataKey="name" stroke="#555" fontSize={10} axisLine={false} tickLine={false} />
-                  <YAxis stroke="#555" fontSize={10} axisLine={false} tickLine={false} tickFormatter={(v) => `R$ ${v.toLocaleString('pt-BR')}`} />
-                  <Tooltip 
-                    formatter={(value: number) => formatBRL(value)}
-                    cursor={{ fill: 'rgba(255,255,255,0.02)' }}
-                    contentStyle={{ backgroundColor: '#111', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', fontSize: '11px' }}
-                  />
-                  <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: '900', paddingTop: '20px' }} />
-                  <Bar dataKey="Lucro Bruto" fill="#22c55e" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="Custos Operador" fill="#ef4444" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {teamPerformanceData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={teamPerformanceData} margin={{ left: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" vertical={false} />
+                    <XAxis dataKey="name" stroke="#555" fontSize={10} axisLine={false} tickLine={false} />
+                    <YAxis stroke="#555" fontSize={10} axisLine={false} tickLine={false} tickFormatter={(v) => `R$ ${v.toLocaleString('pt-BR')}`} />
+                    <Tooltip 
+                      formatter={(value: number) => formatBRL(value)}
+                      cursor={{ fill: 'rgba(255,255,255,0.02)' }}
+                      contentStyle={{ backgroundColor: '#111', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', fontSize: '11px' }}
+                    />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: '900', paddingTop: '20px' }} />
+                    <Bar dataKey="Lucro Bruto" fill="#22c55e" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="Custos Operador" fill="#ef4444" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-zinc-700 text-[10px] font-black uppercase tracking-widest gap-4">
+                  <AlertTriangle size={32} strokeWidth={1} />
+                  Sem operações de equipe para analisar
+                </div>
+              )}
             </div>
           </div>
         )}
       </div>
-
-      {isAdmin && (
-        <div className="bg-[#121212] rounded-[2.5rem] p-10 border border-white/5 shadow-2xl">
-          <div className="flex items-center gap-4 mb-8">
-            <Receipt size={24} className="text-zinc-600" />
-            <h4 className="font-black uppercase tracking-[0.2em] text-xs text-zinc-400">Separação de Centros de Custo</h4>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="p-8 bg-white/[0.02] rounded-3xl border border-white/5 flex flex-col justify-between">
-              <div>
-                <p className="text-[10px] font-black uppercase text-zinc-500 mb-2">Gastos Master (Débito Gerente)</p>
-                <p className="text-3xl font-black text-white">{formatBRL(stats.managerPersonalCosts)}</p>
-              </div>
-              <div className="mt-6 flex items-center gap-2 text-zinc-500 text-[10px] font-bold">
-                <Smartphone size={14} /> CUSTOS DE SMS E PROXY MASTER
-              </div>
-            </div>
-            <div className="p-8 bg-red-500/5 rounded-3xl border border-red-500/10 flex flex-col justify-between">
-              <div>
-                <p className="text-[10px] font-black uppercase text-red-500/60 mb-2">Gastos Operadores (Débito da Equipe)</p>
-                <p className="text-3xl font-black text-red-500">{formatBRL(stats.teamTotalCosts)}</p>
-              </div>
-              <div className="mt-6 flex items-center gap-2 text-red-500/50 text-[10px] font-bold uppercase">
-                <TrendingDown size={14} /> Valores deduzidos apenas das comissões dos operadores
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

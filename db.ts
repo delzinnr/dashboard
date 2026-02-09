@@ -1,113 +1,127 @@
 
 import { User, Cycle, Cost } from './types';
-import { createClient } from '@supabase/supabase-js';
 
-// Configuração do Supabase fornecida pelo usuário
-const supabaseUrl = 'https://hgrmuhkxkkslmdppshlr.supabase.co';
-// Utilizamos a API_KEY configurada no ambiente para autenticação segura
-const supabaseKey = process.env.API_KEY || ''; 
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Simulação de Banco de Dados Local Robusto
+const STORAGE_KEYS = {
+  USERS: 'smk_users',
+  CYCLES: 'smk_cycles',
+  COSTS: 'smk_costs'
+};
 
-const INITIAL_USERS: User[] = [
-  { id: 'admin-1', name: 'Gerente Geral', username: 'admin', password: '123', role: 'admin', commission: 0 },
-  { id: 'op-1', name: 'Operador Carlos', username: 'carlos', password: '123', role: 'operator', commission: 15 },
-  { id: 'op-2', name: 'Operador Ana', username: 'ana', password: '123', role: 'operator', commission: 10 },
-];
+const getStorage = <T>(key: string, defaultValue: T): T => {
+  if (typeof window === 'undefined') return defaultValue;
+  const data = localStorage.getItem(key);
+  try {
+    return data ? JSON.parse(data) : defaultValue;
+  } catch {
+    return defaultValue;
+  }
+};
+
+const setStorage = <T>(key: string, data: T): void => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(key, JSON.stringify(data));
+  }
+};
 
 export const db = {
+  // --- AUTENTICAÇÃO ---
+  async login(username: string, password: string): Promise<User | null> {
+    const users = getStorage<User[]>(STORAGE_KEYS.USERS, []);
+    const user = users.find(u => u.username === username && u.password === password);
+    return user || null;
+  },
+
+  async hasUsers(): Promise<boolean> {
+    const users = getStorage<User[]>(STORAGE_KEYS.USERS, []);
+    return users.length > 0;
+  },
+
+  async registerAdmin(userData: Omit<User, 'id' | 'role' | 'commission'>): Promise<User> {
+    const newUser: User = {
+      ...userData,
+      id: `admin-${Date.now()}`,
+      role: 'admin',
+      commission: 0
+    };
+    const users = getStorage<User[]>(STORAGE_KEYS.USERS, []);
+    users.push(newUser);
+    setStorage(STORAGE_KEYS.USERS, users);
+    return newUser;
+  },
+
   // --- USUÁRIOS ---
   async getUsers(): Promise<User[]> {
-    const { data, error } = await supabase.from('users').select('*');
-    
-    if (error || !data || data.length === 0) {
-      // Se a tabela estiver vazia, tenta popular com os usuários iniciais pela primeira vez
-      const saved = localStorage.getItem('fm_db_users_synced');
-      if (!saved) {
-        await supabase.from('users').insert(INITIAL_USERS);
-        localStorage.setItem('fm_db_users_synced', 'true');
-        return INITIAL_USERS;
-      }
-      return [];
-    }
-    return data as User[];
+    return getStorage<User[]>(STORAGE_KEYS.USERS, []);
   },
 
   async saveUsers(users: User[]): Promise<void> {
-    // Upsert para salvar ou atualizar múltiplos usuários
-    const { error } = await supabase.from('users').upsert(users);
-    if (error) throw error;
+    setStorage(STORAGE_KEYS.USERS, users);
+  },
+
+  async deleteUser(id: string): Promise<void> {
+    const users = getStorage<User[]>(STORAGE_KEYS.USERS, []).filter(u => u.id !== id);
+    setStorage(STORAGE_KEYS.USERS, users);
   },
 
   // --- CICLOS ---
   async getCycles(): Promise<Cycle[]> {
-    const { data, error } = await supabase
-      .from('cycles')
-      .select('*')
-      .order('date', { ascending: false });
-    
-    if (error) {
-      console.error("Erro ao buscar ciclos:", error);
-      return [];
-    }
-    return data as Cycle[];
+    return getStorage<Cycle[]>(STORAGE_KEYS.CYCLES, []);
   },
 
   async saveCycle(cycle: Cycle): Promise<void> {
-    const { error } = await supabase.from('cycles').insert([cycle]);
-    if (error) throw error;
+    const cycles = getStorage<Cycle[]>(STORAGE_KEYS.CYCLES, []);
+    cycles.unshift(cycle);
+    setStorage(STORAGE_KEYS.CYCLES, cycles);
   },
 
   async saveAllCycles(cycles: Cycle[]): Promise<void> {
-    const { error } = await supabase.from('cycles').upsert(cycles);
-    if (error) throw error;
+    setStorage(STORAGE_KEYS.CYCLES, cycles);
   },
 
   async deleteCycle(id: string): Promise<void> {
-    const { error } = await supabase.from('cycles').delete().eq('id', id);
-    if (error) throw error;
+    const cycles = getStorage<Cycle[]>(STORAGE_KEYS.CYCLES, []).filter(c => c.id !== id);
+    setStorage(STORAGE_KEYS.CYCLES, cycles);
   },
 
   // --- CUSTOS ---
   async getCosts(): Promise<Cost[]> {
-    const { data, error } = await supabase.from('costs').select('*');
-    if (error) return [];
-    return data as Cost[];
+    return getStorage<Cost[]>(STORAGE_KEYS.COSTS, []);
   },
 
   async saveCost(cost: Cost): Promise<void> {
-    const { error } = await supabase.from('costs').insert([cost]);
-    if (error) throw error;
+    const costs = getStorage<Cost[]>(STORAGE_KEYS.COSTS, []);
+    costs.unshift(cost);
+    setStorage(STORAGE_KEYS.COSTS, costs);
   },
 
   async deleteCost(id: string): Promise<void> {
-    const { error } = await supabase.from('costs').delete().eq('id', id);
-    if (error) throw error;
+    const costs = getStorage<Cost[]>(STORAGE_KEYS.COSTS, []).filter(c => c.id !== id);
+    setStorage(STORAGE_KEYS.COSTS, costs);
   },
 
-  // --- FERRAMENTAS ---
+  // --- BACKUP ---
   async exportFullBackup(): Promise<string> {
-    const [users, cycles, costs] = await Promise.all([
-      this.getUsers(),
-      this.getCycles(),
-      this.getCosts()
-    ]);
-    return JSON.stringify({ users, cycles, costs, exportedAt: new Date().toISOString() }, null, 2);
+    const data = {
+      users: await this.getUsers(),
+      cycles: await this.getCycles(),
+      costs: await this.getCosts(),
+      exportedAt: new Date().toISOString()
+    };
+    return JSON.stringify(data, null, 2);
   },
 
   async importBackup(jsonString: string): Promise<void> {
     const data = JSON.parse(jsonString);
-    if (data.users) await supabase.from('users').upsert(data.users);
-    if (data.cycles) await supabase.from('cycles').upsert(data.cycles);
-    if (data.costs) await supabase.from('costs').upsert(data.costs);
+    if (data.users) setStorage(STORAGE_KEYS.USERS, data.users);
+    if (data.cycles) setStorage(STORAGE_KEYS.CYCLES, data.cycles);
+    if (data.costs) setStorage(STORAGE_KEYS.COSTS, data.costs);
   },
 
   async clearAllData(): Promise<void> {
-    // Limpeza radical para manutenção
-    await Promise.all([
-      supabase.from('cycles').delete().neq('id', '0'),
-      supabase.from('costs').delete().neq('id', '0'),
-      supabase.from('users').delete().neq('role', 'admin')
-    ]);
-    window.location.reload();
+    if (typeof window !== 'undefined') {
+      localStorage.clear();
+      window.location.reload();
+    }
   }
 };
