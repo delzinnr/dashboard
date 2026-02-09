@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Settings, ShieldAlert, RefreshCw } from 'lucide-react';
+import { ShieldAlert, RefreshCw } from 'lucide-react';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
 import { CyclesView } from './components/CyclesView';
@@ -13,12 +13,9 @@ import { db } from './db';
 const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => sessionStorage.getItem('fm_is_logged') === 'true');
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [users, setUsers] = useState<User[]>([]);
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const saved = sessionStorage.getItem('fm_current_user');
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [cycles, setCycles] = useState<Cycle[]>([]);
@@ -27,6 +24,14 @@ const App: React.FC = () => {
   const loadAllData = useCallback(async () => {
     setIsLoading(true);
     try {
+      // Checar login persistente antes de buscar tudo
+      const savedUser = localStorage.getItem('fm_current_user') || sessionStorage.getItem('fm_current_user');
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        setCurrentUser(parsed);
+        setIsLoggedIn(true);
+      }
+
       const [fetchedUsers, fetchedCycles, fetchedCosts] = await Promise.all([
         db.getUsers(),
         db.getCycles(),
@@ -36,7 +41,7 @@ const App: React.FC = () => {
       setCycles(fetchedCycles);
       setCosts(fetchedCosts);
     } catch (error) {
-      console.error("Erro ao carregar dados:", error);
+      console.error("Erro ao carregar dados do servidor:", error);
     } finally {
       setIsLoading(false);
     }
@@ -46,16 +51,21 @@ const App: React.FC = () => {
     loadAllData();
   }, [loadAllData]);
 
-  const handleLogin = (user: User) => {
+  const handleLogin = (user: User, remember: boolean) => {
     setIsLoggedIn(true);
     setCurrentUser(user);
-    sessionStorage.setItem('fm_is_logged', 'true');
-    sessionStorage.setItem('fm_current_user', JSON.stringify(user));
+    const storage = remember ? localStorage : sessionStorage;
+    storage.setItem('fm_is_logged', 'true');
+    storage.setItem('fm_current_user', JSON.stringify(user));
+    // Recarregar dados após login para garantir contexto correto
+    loadAllData();
   };
 
   const handleLogout = () => {
     setIsLoggedIn(false);
     setCurrentUser(null);
+    localStorage.removeItem('fm_is_logged');
+    localStorage.removeItem('fm_current_user');
     sessionStorage.removeItem('fm_is_logged');
     sessionStorage.removeItem('fm_current_user');
   };
@@ -68,7 +78,7 @@ const App: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `backup-finance-master-${new Date().toISOString().split('T')[0]}.json`;
+      a.download = `backup-smk-${new Date().toISOString().split('T')[0]}.json`;
       a.click();
     } catch (err) {
       alert('Erro ao exportar dados.');
@@ -84,7 +94,7 @@ const App: React.FC = () => {
         const json = e.target?.result as string;
         await db.importBackup(json);
         await loadAllData();
-        alert('Dados importados e sincronizados com sucesso!');
+        alert('Dados sincronizados com o banco de dados!');
       } catch (err) {
         alert('Erro ao importar arquivo.');
       } finally {
@@ -105,12 +115,11 @@ const App: React.FC = () => {
     try {
       const grossProfit = newCycle.return - newCycle.invested;
       const commValue = grossProfit > 0 ? (grossProfit * (currentUser.commission / 100)) : 0;
-      // Regra solicitada: Lucro do Operador = Lucro da Operação - Valor da Comissão
       const netProfit = grossProfit - commValue;
       
       const cycle: Cycle = {
         ...newCycle,
-        id: `c-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        id: `c-${Date.now()}`,
         profit: Number(netProfit.toFixed(2)),
         commissionValue: Number(commValue.toFixed(2)),
         operatorId: currentUser.id,
@@ -118,9 +127,10 @@ const App: React.FC = () => {
         ownerAdminId: myAdminId
       };
       await db.saveCycle(cycle);
+      // Atualizar lista local para feedback imediato
       setCycles(prev => [cycle, ...prev]);
     } catch (err) {
-      alert('Erro ao salvar ciclo.');
+      alert('Erro ao salvar ciclo no servidor.');
     }
     setIsSyncing(false);
   };
@@ -131,7 +141,7 @@ const App: React.FC = () => {
     try {
       const cost: Cost = {
         ...newCost,
-        id: `exp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        id: `exp-${Date.now()}`,
         operatorId: currentUser.id,
         operatorName: currentUser.name,
         ownerAdminId: myAdminId
@@ -139,30 +149,28 @@ const App: React.FC = () => {
       await db.saveCost(cost);
       setCosts(prev => [cost, ...prev]);
     } catch (err) {
-      alert('Erro ao salvar custo.');
+      alert('Erro ao salvar custo no servidor.');
     }
     setIsSyncing(false);
   };
 
   const deleteCost = async (id: string) => {
+    if (!confirm('Excluir este custo permanentemente do banco?')) return;
     setIsSyncing(true);
     try {
       await db.deleteCost(id);
       setCosts(prev => prev.filter(c => c.id !== id));
-    } catch (err) {
-      alert('Erro ao excluir.');
-    }
+    } catch (err) { alert('Erro ao excluir no servidor.'); }
     setIsSyncing(false);
   };
 
   const deleteCycle = async (id: string) => {
+    if (!confirm('Excluir este ciclo permanentemente do banco?')) return;
     setIsSyncing(true);
     try {
       await db.deleteCycle(id);
       setCycles(prev => prev.filter(c => c.id !== id));
-    } catch (err) {
-      alert('Erro ao excluir.');
-    }
+    } catch (err) { alert('Erro ao excluir no servidor.'); }
     setIsSyncing(false);
   };
 
@@ -179,7 +187,6 @@ const App: React.FC = () => {
         if (c.operatorId === userId) {
           const grossProfit = c.return - c.invested;
           const newCommValue = grossProfit > 0 ? (grossProfit * (newCommission / 100)) : 0;
-          // Recalcula lucro líquido baseado na nova comissão
           const newNetProfit = grossProfit - newCommValue;
           return { 
             ...c, 
@@ -191,23 +198,20 @@ const App: React.FC = () => {
       });
       await db.saveAllCycles(updatedAllCycles);
       setCycles(updatedAllCycles);
-    } catch (err) {
-      alert('Erro ao atualizar comissão.');
-    }
+    } catch (err) { alert('Erro ao atualizar no servidor.'); }
     setIsSyncing(false);
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-10">
-        <div className="w-16 h-16 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-[2rem] flex items-center justify-center text-black font-black text-2xl animate-bounce mb-8 shadow-2xl shadow-yellow-500/20">SMK</div>
-        <RefreshCw className="animate-spin text-yellow-500 mb-2" size={24} />
-        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500">Cloud Syncing...</p>
+      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center">
+        <RefreshCw className="animate-spin text-yellow-500 mb-4" size={32} />
+        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500">Conectando ao Servidor...</p>
       </div>
     );
   }
 
-  if (!isLoggedIn || !currentUser) return <LoginView users={users} onLogin={handleLogin} />;
+  if (!isLoggedIn || !currentUser) return <LoginView onLogin={handleLogin} />;
 
   const filteredCycles = currentUser.role === 'admin' 
     ? cycles.filter(c => c.ownerAdminId === currentUser.id)
@@ -239,19 +243,11 @@ const App: React.FC = () => {
           onAddOperator={async (u) => {
             setIsSyncing(true);
             try {
-              const op: User = { 
-                ...u, 
-                id: `op-${Date.now()}`, 
-                role: 'operator', 
-                parentId: currentUser.id 
-              };
-              const currentFullList = await db.getUsers();
-              const updatedFullList = [...currentFullList, op];
-              await db.saveUsers(updatedFullList);
+              const op: User = { ...u, id: `op-${Date.now()}`, role: 'operator', parentId: currentUser.id };
+              await db.saveUsers([op]);
+              const updatedFullList = await db.getUsers();
               setUsers(updatedFullList);
-            } catch (err) {
-              alert('Erro ao criar operador.');
-            }
+            } catch (err) { alert('Erro ao criar operador no servidor.'); }
             setIsSyncing(false);
           }}
           onDeleteOperator={async (id) => {
@@ -260,17 +256,16 @@ const App: React.FC = () => {
               await db.deleteUser(id);
               const updatedFullList = await db.getUsers();
               setUsers(updatedFullList);
-            } catch (err) {
-              alert('Erro ao remover operador.');
-            }
+            } catch (err) { alert('Erro ao remover operador no servidor.'); }
             setIsSyncing(false);
           }}
         />
       )}
       {(currentView === 'team' || currentView === 'goals') && currentUser.role !== 'admin' && (
-        <div className="flex flex-col items-center justify-center h-[60vh] text-zinc-500">
+        <div className="flex flex-col items-center justify-center h-[60vh] text-zinc-500 text-center px-6">
           <ShieldAlert size={48} className="mb-4 text-zinc-800" />
           <p className="text-xl font-black uppercase tracking-widest text-zinc-700">Acesso Restrito</p>
+          <p className="text-sm mt-2">Esta seção é exclusiva para Gerentes Master.</p>
         </div>
       )}
     </Layout>
