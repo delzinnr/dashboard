@@ -28,7 +28,7 @@ export const db = {
   // --- AUTENTICAÇÃO ---
   async login(username: string, password: string): Promise<User | null> {
     const users = getStorage<User[]>(STORAGE_KEYS.USERS, []);
-    // Comparação case-insensitive para username para evitar erros de digitação comuns
+    // Comparação case-insensitive para username
     const user = users.find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === password);
     return user || null;
   },
@@ -46,8 +46,7 @@ export const db = {
       commission: 0
     };
     const users = getStorage<User[]>(STORAGE_KEYS.USERS, []);
-    // Evita duplicidade se o admin já existir
-    if (users.some(u => u.username === newUser.username)) {
+    if (users.some(u => u.username.toLowerCase() === newUser.username.toLowerCase())) {
        throw new Error("Este usuário já está cadastrado.");
     }
     users.push(newUser);
@@ -61,12 +60,7 @@ export const db = {
   },
 
   async saveUsers(users: User[]): Promise<void> {
-    // Garantia de integridade: não permite salvar array vazio se já houver usuários cadastrados (segurança contra bugs de UI)
-    const existing = getStorage<User[]>(STORAGE_KEYS.USERS, []);
-    if (existing.length > 0 && users.length === 0) {
-      console.warn("Tentativa de salvar lista de usuários vazia bloqueada por segurança.");
-      return;
-    }
+    // A função saveUsers recebe a lista COMPLETA de todos os usuários do sistema
     setStorage(STORAGE_KEYS.USERS, users);
   },
 

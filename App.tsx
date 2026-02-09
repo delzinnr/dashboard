@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Settings, ShieldAlert, RefreshCw } from 'lucide-react';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
@@ -94,8 +94,14 @@ const App: React.FC = () => {
     reader.readAsText(file);
   };
 
-  const addCycle = async (newCycle: Omit<Cycle, 'id' | 'profit' | 'operatorId' | 'operatorName' | 'commissionValue'>) => {
-    if (!currentUser) return;
+  // Determinar o ID do Admin responsável por este usuário (seja ele admin ou operador)
+  const myAdminId = useMemo(() => {
+    if (!currentUser) return '';
+    return currentUser.role === 'admin' ? currentUser.id : (currentUser.parentId || '');
+  }, [currentUser]);
+
+  const addCycle = async (newCycle: Omit<Cycle, 'id' | 'profit' | 'operatorId' | 'operatorName' | 'commissionValue' | 'ownerAdminId'>) => {
+    if (!currentUser || !myAdminId) return;
     setIsSyncing(true);
     try {
       const profit = newCycle.return - newCycle.invested;
@@ -106,7 +112,8 @@ const App: React.FC = () => {
         profit,
         commissionValue: Number(commValue.toFixed(2)),
         operatorId: currentUser.id,
-        operatorName: currentUser.name
+        operatorName: currentUser.name,
+        ownerAdminId: myAdminId
       };
       await db.saveCycle(cycle);
       setCycles(prev => [cycle, ...prev]);
@@ -116,15 +123,16 @@ const App: React.FC = () => {
     setIsSyncing(false);
   };
 
-  const addCost = async (newCost: Omit<Cost, 'id' | 'operatorId' | 'operatorName'>) => {
-    if (!currentUser) return;
+  const addCost = async (newCost: Omit<Cost, 'id' | 'operatorId' | 'operatorName' | 'ownerAdminId'>) => {
+    if (!currentUser || !myAdminId) return;
     setIsSyncing(true);
     try {
       const cost: Cost = {
         ...newCost,
         id: `exp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
         operatorId: currentUser.id,
-        operatorName: currentUser.name
+        operatorName: currentUser.name,
+        ownerAdminId: myAdminId
       };
       await db.saveCost(cost);
       setCosts(prev => [cost, ...prev]);
@@ -159,19 +167,21 @@ const App: React.FC = () => {
   const updateCommission = async (userId: string, newCommission: number) => {
     setIsSyncing(true);
     try {
-      const updatedUsers = users.map(u => u.id === userId ? { ...u, commission: newCommission } : u);
-      await db.saveUsers(updatedUsers);
-      setUsers(updatedUsers);
+      const allUsers = await db.getUsers();
+      const updatedAllUsers = allUsers.map(u => u.id === userId ? { ...u, commission: newCommission } : u);
+      await db.saveUsers(updatedAllUsers);
+      setUsers(updatedAllUsers);
       
-      const updatedCycles = cycles.map(c => {
+      const allCycles = await db.getCycles();
+      const updatedAllCycles = allCycles.map(c => {
         if (c.operatorId === userId) {
           const newCommValue = c.profit > 0 ? (c.profit * (newCommission / 100)) : 0;
           return { ...c, commissionValue: Number(newCommValue.toFixed(2)) };
         }
         return c;
       });
-      await db.saveAllCycles(updatedCycles);
-      setCycles(updatedCycles);
+      await db.saveAllCycles(updatedAllCycles);
+      setCycles(updatedAllCycles);
     } catch (err) {
       alert('Erro ao atualizar comissão.');
     }
@@ -190,8 +200,16 @@ const App: React.FC = () => {
 
   if (!isLoggedIn || !currentUser) return <LoginView users={users} onLogin={handleLogin} />;
 
-  const filteredCycles = currentUser.role === 'admin' ? cycles : cycles.filter(c => c.operatorId === currentUser.id);
-  const filteredCosts = currentUser.role === 'admin' ? costs : costs.filter(c => c.operatorId === currentUser.id);
+  // Filtragem de dados com base no isolamento de Admin
+  const filteredCycles = currentUser.role === 'admin' 
+    ? cycles.filter(c => c.ownerAdminId === currentUser.id)
+    : cycles.filter(c => c.operatorId === currentUser.id);
+
+  const filteredCosts = currentUser.role === 'admin' 
+    ? costs.filter(c => c.ownerAdminId === currentUser.id)
+    : costs.filter(c => c.operatorId === currentUser.id);
+
+  const myTeam = users.filter(u => u.parentId === currentUser.id);
 
   return (
     <Layout 
@@ -208,16 +226,21 @@ const App: React.FC = () => {
       {currentView === 'costs' && <CostsView costs={filteredCosts} onAddCost={addCost} onDeleteCost={deleteCost} userRole={currentUser.role} />}
       {currentView === 'team' && currentUser.role === 'admin' && (
         <TeamView 
-          users={users.filter(u => u.role === 'operator')} 
+          users={myTeam} 
           onUpdateCommission={updateCommission} 
           onAddOperator={async (u) => {
             setIsSyncing(true);
             try {
-              const op: User = { ...u, id: `op-${Date.now()}`, role: 'operator' };
-              const currentUsers = await db.getUsers();
-              const updatedUsers = [...currentUsers, op];
-              await db.saveUsers(updatedUsers);
-              setUsers(updatedUsers);
+              const op: User = { 
+                ...u, 
+                id: `op-${Date.now()}`, 
+                role: 'operator', 
+                parentId: currentUser.id 
+              };
+              const currentFullList = await db.getUsers();
+              const updatedFullList = [...currentFullList, op];
+              await db.saveUsers(updatedFullList);
+              setUsers(updatedFullList);
             } catch (err) {
               alert('Erro ao criar operador.');
             }
@@ -227,7 +250,8 @@ const App: React.FC = () => {
             setIsSyncing(true);
             try {
               await db.deleteUser(id);
-              setUsers(prev => prev.filter(u => u.id !== id));
+              const updatedFullList = await db.getUsers();
+              setUsers(updatedFullList);
             } catch (err) {
               alert('Erro ao remover operador.');
             }

@@ -11,6 +11,7 @@ export interface User {
   role: Role;
   commission: number;
   avatar?: string;
+  parentId?: string; // ID do Admin que criou este operador
 }
 
 export interface Cycle {
@@ -24,6 +25,7 @@ export interface Cycle {
   commissionValue: number;
   operatorId: string;
   operatorName: string;
+  ownerAdminId: string; // ID do Admin dono deste dado
 }
 
 export interface Cost {
@@ -34,6 +36,7 @@ export interface Cost {
   type: CostType;
   operatorId: string;
   operatorName: string;
+  ownerAdminId: string; // ID do Admin dono deste dado
 }
 
 export type View = 'dashboard' | 'cycles' | 'costs' | 'team' | 'goals';
