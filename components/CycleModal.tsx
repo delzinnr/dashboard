@@ -6,7 +6,7 @@ import { Cycle } from '../types';
 interface CycleModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: Omit<Cycle, 'id' | 'profit' | 'operatorId' | 'operatorName' | 'commissionValue'>) => void;
+  onSave: (data: Omit<Cycle, 'id' | 'profit' | 'operatorId' | 'operatorName' | 'commissionValue' | 'ownerAdminId'>) => void;
 }
 
 export const CycleModal: React.FC<CycleModalProps> = ({ isOpen, onClose, onSave }) => {

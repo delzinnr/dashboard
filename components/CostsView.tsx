@@ -29,7 +29,7 @@ import { Cost, Role, CostType, Timeframe } from '../types';
 
 interface CostsViewProps {
   costs: Cost[];
-  onAddCost: (cost: Omit<Cost, 'id' | 'operatorId' | 'operatorName'>) => void;
+  onAddCost: (cost: Omit<Cost, 'id' | 'operatorId' | 'operatorName' | 'ownerAdminId'>) => void;
   onDeleteCost: (id: string) => void;
   userRole: Role;
 }

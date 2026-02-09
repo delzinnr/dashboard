@@ -6,7 +6,7 @@ import { CycleModal } from './CycleModal';
 
 interface CyclesViewProps {
   cycles: Cycle[];
-  onAddCycle: (cycle: Omit<Cycle, 'id' | 'profit' | 'operatorId' | 'operatorName' | 'commissionValue'>) => void;
+  onAddCycle: (cycle: Omit<Cycle, 'id' | 'profit' | 'operatorId' | 'operatorName' | 'commissionValue' | 'ownerAdminId'>) => void;
   onDeleteCycle: (id: string) => void;
   userRole: Role;
 }
