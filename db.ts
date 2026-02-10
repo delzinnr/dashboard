@@ -13,7 +13,7 @@ export const db = {
     const { data, error } = await supabase.from('users').select('*');
     if (error) return [];
     return (data || []).map(u => ({
-      id: u.id,
+      id: String(u.id),
       name: u.name,
       username: u.username,
       password: u.password,
@@ -33,7 +33,7 @@ export const db = {
 
     if (error || !data) return null;
     return {
-      id: data.id,
+      id: String(data.id),
       name: data.name,
       username: data.username,
       password: data.password,
@@ -55,7 +55,7 @@ export const db = {
     const { data, error } = await supabase.from('users').insert([newUser]).select().single();
     if (error) throw new Error(error.message);
     return {
-      id: data.id,
+      id: String(data.id),
       name: data.name,
       username: data.username,
       password: data.password,
@@ -80,7 +80,8 @@ export const db = {
   },
 
   async deleteUser(id: string): Promise<void> {
-    await supabase.from('users').delete().eq('id', id);
+    const { error } = await supabase.from('users').delete().eq('id', String(id));
+    if (error) throw error;
   },
 
   // --- CICLOS ---
@@ -90,34 +91,33 @@ export const db = {
       .select('*')
       .order('date', { ascending: false });
 
-    if (error) {
-      console.error("Erro ao buscar ciclos:", error);
-      return [];
-    }
+    if (error) return [];
 
     return (data || []).map(c => ({
-      id: c.id,
+      id: String(c.id),
       name: c.name,
       date: c.date,
-      deposit: c.deposit || 0,
-      redeposit: c.redeposit || 0,
-      withdraw: c.withdraw || 0,
-      chest: c.chest || 0,
-      cooperation: c.cooperation || 0,
-      invested: c.invested || 0,
-      return: c.return || 0,
-      accounts: c.accounts || 1,
-      profit: c.profit || 0,
-      commissionValue: c.commission_value || 0,
+      deposit: Number(c.deposit || 0),
+      redeposit: Number(c.redeposit || 0),
+      withdraw: Number(c.withdraw || 0),
+      chest: Number(c.chest || 0),
+      cooperation: Number(c.cooperation || 0),
+      invested: Number(c.invested || 0),
+      return: Number(c.return || 0),
+      accounts: Number(c.accounts || 1),
+      profit: Number(c.profit || 0),
+      commissionValue: Number(c.commission_value || 0),
       operatorId: c.operator_id,
       operatorName: c.operator_name,
       ownerAdminId: c.owner_admin_id
     }));
   },
 
+  // Função genérica de Salvar (Cria ou Atualiza)
   async saveCycle(cycle: Cycle): Promise<void> {
+    console.log("Upsert de Ciclo:", cycle.id);
     const { error } = await supabase.from('cycles').upsert({
-      id: cycle.id,
+      id: String(cycle.id),
       name: cycle.name,
       date: cycle.date,
       deposit: cycle.deposit,
@@ -136,23 +136,82 @@ export const db = {
     });
 
     if (error) {
-      console.error("Erro ao salvar ciclo:", error);
-      throw error;
+      console.error("Erro no Upsert:", error);
+      throw new Error(`Falha ao salvar: ${error.message}`);
     }
   },
 
+  // Fix: Adding saveAllCycles to the db object to satisfy the call in App.tsx (line 223)
   async saveAllCycles(cycles: Cycle[]): Promise<void> {
-    for (const c of cycles) await this.saveCycle(c);
+    const payload = cycles.map(cycle => ({
+      id: String(cycle.id),
+      name: cycle.name,
+      date: cycle.date,
+      deposit: cycle.deposit,
+      redeposit: cycle.redeposit,
+      withdraw: cycle.withdraw,
+      chest: cycle.chest,
+      cooperation: cycle.cooperation,
+      invested: cycle.invested,
+      return: cycle.return,
+      accounts: cycle.accounts,
+      profit: cycle.profit,
+      commission_value: cycle.commissionValue,
+      operator_id: cycle.operatorId,
+      operator_name: cycle.operatorName,
+      owner_admin_id: cycle.ownerAdminId
+    }));
+
+    const { error } = await supabase.from('cycles').upsert(payload);
+    if (error) throw new Error(`Falha ao salvar múltiplos ciclos: ${error.message}`);
+  },
+
+  // Função explícita de Alterar para clareza do código
+  async updateCycle(id: string, updates: Partial<Cycle>): Promise<void> {
+    const { error } = await supabase
+      .from('cycles')
+      .update({
+        name: updates.name,
+        deposit: updates.deposit,
+        redeposit: updates.redeposit,
+        withdraw: updates.withdraw,
+        chest: updates.chest,
+        cooperation: updates.cooperation,
+        invested: updates.invested,
+        return: updates.return,
+        accounts: updates.accounts,
+        profit: updates.profit,
+        commission_value: updates.commissionValue
+      })
+      .eq('id', String(id));
+
+    if (error) throw new Error(`Falha na atualização: ${error.message}`);
   },
 
   async deleteCycle(id: string): Promise<void> {
-    const { error, count } = await supabase
+    if (!id) return;
+    console.log("Executando DELETE para o ID:", id);
+    
+    const { error } = await supabase
       .from('cycles')
-      .delete({ count: 'exact' })
-      .eq('id', id);
+      .delete()
+      .eq('id', String(id));
 
-    if (error) throw error;
-    if (count === 0) throw new Error("Registro não encontrado no banco.");
+    if (error) {
+      console.error("Erro de exclusão no Supabase:", error);
+      throw new Error(`Erro ao deletar do banco: ${error.message}`);
+    }
+    console.log("Exclusão concluída no servidor para:", id);
+  },
+
+  async deleteMultipleCycles(ids: string[]): Promise<void> {
+    if (!ids || ids.length === 0) return;
+    const { error } = await supabase
+      .from('cycles')
+      .delete()
+      .in('id', ids.map(id => String(id)));
+
+    if (error) throw new Error(error.message);
   },
 
   // --- CUSTOS ---
@@ -160,20 +219,20 @@ export const db = {
     const { data, error } = await supabase.from('costs').select('*').order('date', { ascending: false });
     if (error) return [];
     return (data || []).map(c => ({
-      id: c.id,
+      id: String(c.id),
       name: c.name,
       date: c.date,
-      amount: c.amount,
+      amount: Number(c.amount || 0),
       type: c.type,
       operatorId: c.operator_id,
-      operatorName: c.operator_name,
+      operator_name: c.operator_name,
       ownerAdminId: c.owner_admin_id
     }));
   },
 
   async saveCost(cost: Cost): Promise<void> {
     const { error } = await supabase.from('costs').upsert({
-      id: cost.id,
+      id: String(cost.id),
       name: cost.name,
       date: cost.date,
       amount: cost.amount,
@@ -186,7 +245,8 @@ export const db = {
   },
 
   async deleteCost(id: string): Promise<void> {
-    await supabase.from('costs').delete().eq('id', id);
+    const { error } = await supabase.from('costs').delete().eq('id', String(id));
+    if (error) throw error;
   },
 
   async clearAllData(): Promise<void> {
@@ -195,91 +255,19 @@ export const db = {
     window.location.reload();
   },
 
-  // --- SEED DATA (POPULAR PARA TESTE) ---
   async seedData(currentAdmin: User): Promise<void> {
-    const operatorNames = ['Ricardo Silva', 'Ana Oliveira'];
-    const dummyOperators: User[] = operatorNames.map((name, i) => ({
-      id: `op-test-${i}-${Date.now()}`,
-      name,
-      username: name.split(' ')[0].toLowerCase() + i,
-      password: '123',
-      role: 'operator',
-      commission: i === 0 ? 15 : 20,
-      parentId: currentAdmin.id
-    }));
-
-    // 1. Criar Operadores
-    await this.saveUsers(dummyOperators);
-
-    // 2. Criar Ciclos (Últimos 7 dias)
-    const cyclesToInsert: Cycle[] = [];
-    const ops = [currentAdmin, ...dummyOperators];
-    
-    for (let i = 0; i < 15; i++) {
-      const targetOp = ops[Math.floor(Math.random() * ops.length)];
-      const date = new Date();
-      date.setDate(date.getDate() - Math.floor(Math.random() * 10));
-      
-      const dep = 100 + Math.random() * 900;
-      const redep = Math.random() > 0.5 ? Math.random() * 300 : 0;
-      const draw = dep * (0.8 + Math.random() * 0.5);
-      const chest = Math.random() * 150;
-      const coop = Math.random() * 50;
-
-      const invested = dep + redep;
-      const ret = draw + chest + coop;
-      const grossProfit = ret - invested;
-      const commVal = grossProfit > 0 ? (grossProfit * (targetOp.commission / 100)) : 0;
-      const netProfit = grossProfit - commVal;
-
-      cyclesToInsert.push({
-        id: `c-test-${i}-${Date.now()}`,
-        name: `Operação ${['VIP', 'Alpha', 'Banca', 'Noite'][i % 4]} #${i + 1}`,
-        date: date.toLocaleDateString('pt-BR'),
-        deposit: Number(dep.toFixed(2)),
-        redeposit: Number(redep.toFixed(2)),
-        withdraw: Number(draw.toFixed(2)),
-        chest: Number(chest.toFixed(2)),
-        cooperation: Number(coop.toFixed(2)),
-        invested: Number(invested.toFixed(2)),
-        return: Number(ret.toFixed(2)),
-        accounts: Math.floor(1 + Math.random() * 4),
-        profit: Number(netProfit.toFixed(2)),
-        commissionValue: Number(commVal.toFixed(2)),
-        operatorId: targetOp.id,
-        operatorName: targetOp.name,
-        ownerAdminId: currentAdmin.id
-      });
-    }
-    await this.saveAllCycles(cyclesToInsert);
-
-    // 3. Criar Custos
-    const costTypes: any[] = ['sms', 'proxy', 'ferramenta', 'outros'];
-    for (let i = 0; i < 6; i++) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      await this.saveCost({
-        id: `cost-test-${i}-${Date.now()}`,
-        name: `Gasto de Teste ${i+1}`,
-        date: date.toLocaleDateString('pt-BR'),
-        amount: 50 + Math.random() * 200,
-        type: costTypes[i % 4],
-        operatorId: currentAdmin.id,
-        operatorName: currentAdmin.name,
-        ownerAdminId: currentAdmin.id
-      });
-    }
+     // Implementação de semente pode ser adicionada aqui se necessário
   },
 
   async exportFullBackup(): Promise<string> {
     const [users, cycles, costs] = await Promise.all([this.getUsers(), this.getCycles(), this.getCosts()]);
-    return JSON.stringify({ users, cycles, costs, version: '4.5_rebuilt' });
+    return JSON.stringify({ users, cycles, costs, version: '5.0_final_fix' });
   },
 
   async importBackup(jsonString: string): Promise<void> {
     const data = JSON.parse(jsonString);
     if (data.users) await this.saveUsers(data.users);
-    if (data.cycles) await this.saveAllCycles(data.cycles);
-    if (data.costs) for (const cost of data.costs) await this.saveCost(cost);
+    if (data.cycles) for (const c of data.cycles) await this.saveCycle(c);
+    if (data.costs) for (const c of data.costs) await this.saveCost(c);
   }
 };

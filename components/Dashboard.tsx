@@ -95,7 +95,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ cycles, costs, userRole, c
     const totalCommission = filteredCycles.reduce((acc, c) => acc + c.commissionValue, 0);
     const totalCosts = filteredCosts.reduce((acc, c) => acc + c.amount, 0);
     
-    // Métricas Pessoais (Apenas o que o gerente operou)
+    // Métricas Pessoais (Apenas o que o usuário logado operou)
     const personalCycles = filteredCycles.filter(c => c.operatorId === currentUserId);
     const personalProfit = personalCycles.reduce((acc, c) => acc + c.profit, 0);
     const personalInvested = personalCycles.reduce((acc, c) => acc + c.invested, 0);
@@ -125,6 +125,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ cycles, costs, userRole, c
   }, [filteredCycles, filteredCosts, isAdmin, currentUserId]);
 
   const teamPerformanceData = useMemo(() => {
+    if (!isAdmin) return []; // Segurança: operadores não calculam dados da equipe
+    
     const data: Record<string, { name: string, profit: number, commission: number, operations: number }> = {};
     filteredCycles.forEach(c => {
       if (!data[c.operatorId]) {
@@ -135,14 +137,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ cycles, costs, userRole, c
       data[c.operatorId].operations += 1;
     });
     return Object.values(data).sort((a, b) => b.profit - a.profit);
-  }, [filteredCycles]);
+  }, [filteredCycles, isAdmin]);
 
   const evolutionData = useMemo(() => {
-    // Combinar ciclos e custos em uma única linha do tempo
     const timeline: { date: Date, value: number }[] = [];
     
     filteredCycles.forEach(c => {
       const isMyOp = c.operatorId === currentUserId;
+      // Para o Admin: Ganhos = Minhas Ops + Comissões dos outros. Para Operador: Apenas minhas Ops.
       const gain = isAdmin ? (c.commissionValue + (isMyOp ? c.profit : 0)) : c.profit;
       timeline.push({ date: parseDate(c.date), value: gain });
     });
@@ -151,10 +153,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ cycles, costs, userRole, c
       timeline.push({ date: parseDate(cost.date), value: -cost.amount });
     });
 
-    // Ordenar por data
     timeline.sort((a, b) => a.date.getTime() - b.date.getTime());
 
-    // Agrupar por data e calcular acumulado
     let runningTotal = 0;
     const result: Record<string, number> = {};
     
@@ -173,7 +173,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ cycles, costs, userRole, c
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Analise SMK Finance Gerencial: Saldo Líquido ${formatBRL(stats.net)}, ROI Pessoal ${stats.personalRoi}%, Comissões Equipe ${formatBRL(stats.commission)}, Custos ${formatBRL(stats.costs)}. Dê um conselho estratégico curto em PT-BR.`
+        contents: `Analise SMK Finance ${isAdmin ? 'Gerencial' : 'Operacional'}: Saldo Líquido ${formatBRL(stats.net)}, ROI ${isAdmin ? stats.roi : stats.personalRoi}%, Custos ${formatBRL(stats.costs)}. Dê um conselho estratégico curto em PT-BR.`
       });
       setAiInsight(response.text);
     } catch (e) {
@@ -214,11 +214,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ cycles, costs, userRole, c
         </div>
       )}
 
-      {/* SEÇÃO 1: VISÃO CONSOLIDADA */}
+      {/* SEÇÃO 1: VISÃO CONSOLIDADA / MEU DESEMPENHO */}
       <div className="space-y-4">
         <div className="flex items-center gap-2 px-1">
           <ShieldCheck size={14} className="text-yellow-500" />
-          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Visão Consolidada</h2>
+          <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">{isAdmin ? 'Visão Consolidada' : 'Meu Desempenho'}</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
           <div className="bg-[#0c0c0c] border border-yellow-500/30 p-6 rounded-[2.5rem] relative group overflow-hidden md:col-span-2 ring-1 ring-yellow-500/10">
@@ -228,24 +228,26 @@ export const Dashboard: React.FC<DashboardProps> = ({ cycles, costs, userRole, c
               <span className="text-[9px] font-black text-yellow-500 uppercase tracking-widest">Resultado Líquido Final</span>
             </div>
             <h3 className={`text-4xl font-black truncate relative ${stats.net >= 0 ? 'text-white' : 'text-red-500'}`}>{formatBRL(stats.net)}</h3>
-            <p className="text-[9px] text-zinc-600 font-bold uppercase mt-2">Saldo Real (Meus Ganhos + Comissões - Custos)</p>
+            <p className="text-[9px] text-zinc-600 font-bold uppercase mt-2">
+              {isAdmin ? 'Saldo Real (Meus Ganhos + Comissões - Custos)' : 'Saldo Real (Meus Ganhos - Meus Custos)'}
+            </p>
           </div>
 
           <div className="bg-[#0c0c0c] border border-red-500/20 p-6 rounded-[2.5rem]">
             <div className="flex items-center justify-between mb-4">
               <div className="p-2 bg-red-500/10 rounded-xl text-red-500"><Receipt size={18} /></div>
-              <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">Gastos Gerais</span>
+              <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">Gastos Operacionais</span>
             </div>
             <h3 className="text-2xl font-black text-red-500 truncate">{formatBRL(stats.costs)}</h3>
-            <p className="text-[9px] text-zinc-600 font-bold uppercase mt-2">Despesas totais do período</p>
+            <p className="text-[9px] text-zinc-600 font-bold uppercase mt-2">Despesas do período selecionado</p>
           </div>
         </div>
       </div>
 
-      {/* SEÇÃO 2: MINHA OPERAÇÃO VS EQUIPE */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {/* SEÇÃO 2: OPERAÇÃO E EQUIPE (ESTA ÚLTIMA APENAS ADMIN) */}
+      <div className={`grid grid-cols-1 ${isAdmin ? 'lg:grid-cols-2' : 'max-w-2xl mx-auto'} gap-8`}>
         
-        {/* COLUNA: MINHA PERFORMANCE */}
+        {/* COLUNA: PERFORMANCE DO USUÁRIO */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 px-1">
             <UserIcon size={14} className="text-blue-500" />
@@ -274,37 +276,39 @@ export const Dashboard: React.FC<DashboardProps> = ({ cycles, costs, userRole, c
           </div>
         </div>
 
-        {/* COLUNA: PERFORMANCE EQUIPE */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 px-1">
-            <Users size={14} className="text-purple-500" />
-            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Performance da Equipe</h2>
+        {/* COLUNA: PERFORMANCE EQUIPE (EXCLUSIVA ADMIN) */}
+        {isAdmin && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 px-1">
+              <Users size={14} className="text-purple-500" />
+              <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Performance da Equipe (Rede)</h2>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-[#0c0c0c] border border-purple-500/20 p-5 rounded-[2rem]">
+                <div className="p-1.5 bg-purple-500/10 rounded-lg text-purple-500 w-fit mb-3"><Coins size={16} /></div>
+                <p className="text-[8px] font-black text-zinc-600 uppercase mb-1">Comissões Recebidas</p>
+                <h4 className="text-lg font-black text-purple-400">{formatBRL(stats.commission)}</h4>
+              </div>
+              <div className="bg-[#0c0c0c] border border-white/5 p-5 rounded-[2rem]">
+                <div className="p-1.5 bg-zinc-800 rounded-lg text-zinc-500 w-fit mb-3"><TrendingUp size={16} /></div>
+                <p className="text-[8px] font-black text-zinc-600 uppercase mb-1">Volume Retorno Total</p>
+                <h4 className="text-lg font-black text-white">{formatBRL(stats.return)}</h4>
+              </div>
+            </div>
+            <div className="bg-[#0c0c0c] border border-white/5 p-5 rounded-[2.5rem] flex items-center justify-between">
+              <div>
+                 <p className="text-[8px] font-black text-zinc-600 uppercase mb-1">Capital Total Girado (Rede)</p>
+                 <h4 className="text-xl font-black text-zinc-500">{formatBRL(stats.invested)}</h4>
+              </div>
+              <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-zinc-700">
+                <Users size={20} />
+              </div>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-[#0c0c0c] border border-purple-500/20 p-5 rounded-[2rem]">
-              <div className="p-1.5 bg-purple-500/10 rounded-lg text-purple-500 w-fit mb-3"><Coins size={16} /></div>
-              <p className="text-[8px] font-black text-zinc-600 uppercase mb-1">Comissões Recebidas</p>
-              <h4 className="text-lg font-black text-purple-400">{formatBRL(stats.commission)}</h4>
-            </div>
-            <div className="bg-[#0c0c0c] border border-white/5 p-5 rounded-[2rem]">
-              <div className="p-1.5 bg-zinc-800 rounded-lg text-zinc-500 w-fit mb-3"><TrendingUp size={16} /></div>
-              <p className="text-[8px] font-black text-zinc-600 uppercase mb-1">Volume Retorno Total</p>
-              <h4 className="text-lg font-black text-white">{formatBRL(stats.return)}</h4>
-            </div>
-          </div>
-          <div className="bg-[#0c0c0c] border border-white/5 p-5 rounded-[2.5rem] flex items-center justify-between">
-            <div>
-               <p className="text-[8px] font-black text-zinc-600 uppercase mb-1">Capital Total Girado (Rede)</p>
-               <h4 className="text-xl font-black text-zinc-500">{formatBRL(stats.invested)}</h4>
-            </div>
-            <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-zinc-700">
-              <Users size={20} />
-            </div>
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* GRÁFICO DE EVOLUÇÃO (REAL COM CUSTOS) */}
+      {/* GRÁFICO DE EVOLUÇÃO (VISÍVEL PARA AMBOS, MAS COM DADOS FILTRADOS) */}
       <div className="bg-[#0c0c0c] rounded-[2.5rem] p-6 md:p-10 border border-white/5 shadow-2xl overflow-hidden">
         <div className="flex items-center gap-4 mb-8">
           <div className="p-3 bg-yellow-500/10 rounded-2xl text-yellow-500"><LineChartIcon size={20} /></div>
@@ -337,7 +341,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ cycles, costs, userRole, c
         </div>
       </div>
 
-      {/* PERFORMANCE POR OPERADOR (ADMIN ONLY) */}
+      {/* PERFORMANCE POR OPERADOR (EXCLUSIVO ADMIN) */}
       {isAdmin && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-[#0c0c0c] rounded-[2.5rem] p-8 border border-white/5 shadow-2xl">

@@ -135,7 +135,34 @@ const App: React.FC = () => {
         setCycles(prev => [cycle, ...prev]);
       }
     } catch (err: any) {
-      alert(`Erro ao salvar no servidor: ${err.message || 'Verifique se as novas colunas foram adicionadas ao Supabase.'}`);
+      alert(`Erro ao salvar no servidor: ${err.message}`);
+    }
+    setIsSyncing(false);
+  };
+
+  const deleteCycle = async (id: string) => {
+    if (!confirm('Excluir este ciclo permanentemente?')) return;
+    setIsSyncing(true);
+    try {
+      await db.deleteCycle(id);
+      setCycles(prev => prev.filter(c => c.id !== id));
+    } catch (err: any) { 
+      console.error(err);
+      alert(`FALHA NA EXCLUSÃO: ${err.message}\n\nCertifique-se de que executou o comando SQL no Supabase para converter os IDs em TEXT.`); 
+    }
+    setIsSyncing(false);
+  };
+
+  const deleteMultipleCycles = async (ids: string[]) => {
+    if (!ids || ids.length === 0) return;
+    if (!confirm(`Deseja excluir permanentemente ${ids.length} ciclo(s)?`)) return;
+    setIsSyncing(true);
+    try {
+      await db.deleteMultipleCycles(ids);
+      setCycles(prev => prev.filter(c => !ids.includes(c.id)));
+    } catch (err: any) {
+      console.error(err);
+      alert(`FALHA NA EXCLUSÃO EM MASSA: ${err.message}`);
     }
     setIsSyncing(false);
   };
@@ -160,24 +187,13 @@ const App: React.FC = () => {
   };
 
   const deleteCost = async (id: string) => {
-    if (!confirm('Excluir este custo permanentemente do banco?')) return;
+    if (!confirm('Excluir este custo permanentemente?')) return;
     setIsSyncing(true);
     try {
       await db.deleteCost(id);
       setCosts(prev => prev.filter(c => c.id !== id));
-    } catch (err) { alert('Erro ao excluir no servidor.'); }
-    setIsSyncing(false);
-  };
-
-  const deleteCycle = async (id: string) => {
-    if (!confirm('Excluir este ciclo permanentemente do banco?')) return;
-    setIsSyncing(true);
-    try {
-      await db.deleteCycle(id);
-      setCycles(prev => prev.filter(c => c.id !== id));
-    } catch (err) { 
-      console.error(err);
-      alert('Erro ao excluir no servidor.'); 
+    } catch (err: any) { 
+      alert(`Erro ao excluir custo: ${err.message}`); 
     }
     setIsSyncing(false);
   };
@@ -214,7 +230,7 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center">
         <RefreshCw className="animate-spin text-yellow-500 mb-4" size={32} />
-        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500">Conectando ao Servidor...</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500">Conectando ao Banco de Dados...</p>
       </div>
     );
   }
@@ -242,7 +258,7 @@ const App: React.FC = () => {
       onImportData={handleImportData}
     >
       {currentView === 'dashboard' && <Dashboard cycles={filteredCycles} costs={filteredCosts} userRole={currentUser.role} currentUserId={currentUser.id} />}
-      {currentView === 'cycles' && <CyclesView cycles={filteredCycles} onAddCycle={addOrUpdateCycle} onDeleteCycle={deleteCycle} userRole={currentUser.role} />}
+      {currentView === 'cycles' && <CyclesView cycles={filteredCycles} onAddCycle={addOrUpdateCycle} onDeleteCycle={deleteCycle} onDeleteMultipleCycles={deleteMultipleCycles} userRole={currentUser.role} />}
       {currentView === 'costs' && <CostsView costs={filteredCosts} onAddCost={addCost} onDeleteCost={deleteCost} userRole={currentUser.role} />}
       {currentView === 'team' && currentUser.role === 'admin' && (
         <TeamView 
