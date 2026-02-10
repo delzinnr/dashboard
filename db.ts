@@ -115,7 +115,6 @@ export const db = {
 
   // Função genérica de Salvar (Cria ou Atualiza)
   async saveCycle(cycle: Cycle): Promise<void> {
-    console.log("Upsert de Ciclo:", cycle.id);
     const { error } = await supabase.from('cycles').upsert({
       id: String(cycle.id),
       name: cycle.name,
@@ -136,12 +135,11 @@ export const db = {
     });
 
     if (error) {
-      console.error("Erro no Upsert:", error);
+      console.error("Erro ao salvar ciclo:", error);
       throw new Error(`Falha ao salvar: ${error.message}`);
     }
   },
 
-  // Fix: Adding saveAllCycles to the db object to satisfy the call in App.tsx (line 223)
   async saveAllCycles(cycles: Cycle[]): Promise<void> {
     const payload = cycles.map(cycle => ({
       id: String(cycle.id),
@@ -166,31 +164,8 @@ export const db = {
     if (error) throw new Error(`Falha ao salvar múltiplos ciclos: ${error.message}`);
   },
 
-  // Função explícita de Alterar para clareza do código
-  async updateCycle(id: string, updates: Partial<Cycle>): Promise<void> {
-    const { error } = await supabase
-      .from('cycles')
-      .update({
-        name: updates.name,
-        deposit: updates.deposit,
-        redeposit: updates.redeposit,
-        withdraw: updates.withdraw,
-        chest: updates.chest,
-        cooperation: updates.cooperation,
-        invested: updates.invested,
-        return: updates.return,
-        accounts: updates.accounts,
-        profit: updates.profit,
-        commission_value: updates.commissionValue
-      })
-      .eq('id', String(id));
-
-    if (error) throw new Error(`Falha na atualização: ${error.message}`);
-  },
-
   async deleteCycle(id: string): Promise<void> {
     if (!id) return;
-    console.log("Executando DELETE para o ID:", id);
     
     const { error } = await supabase
       .from('cycles')
@@ -198,10 +173,9 @@ export const db = {
       .eq('id', String(id));
 
     if (error) {
-      console.error("Erro de exclusão no Supabase:", error);
+      console.error("Erro de exclusão no Supabase (Cycles):", error);
       throw new Error(`Erro ao deletar do banco: ${error.message}`);
     }
-    console.log("Exclusão concluída no servidor para:", id);
   },
 
   async deleteMultipleCycles(ids: string[]): Promise<void> {
@@ -225,7 +199,7 @@ export const db = {
       amount: Number(c.amount || 0),
       type: c.type,
       operatorId: c.operator_id,
-      operator_name: c.operator_name,
+      operatorName: c.operator_name,
       ownerAdminId: c.owner_admin_id
     }));
   },
@@ -241,12 +215,22 @@ export const db = {
       operator_name: cost.operatorName,
       owner_admin_id: cost.ownerAdminId
     });
-    if (error) throw error;
+    if (error) {
+      console.error("Erro ao salvar custo:", error);
+      throw error;
+    }
   },
 
   async deleteCost(id: string): Promise<void> {
-    const { error } = await supabase.from('costs').delete().eq('id', String(id));
-    if (error) throw error;
+    const { error } = await supabase
+      .from('costs')
+      .delete()
+      .eq('id', String(id));
+      
+    if (error) {
+      console.error("Erro de exclusão no Supabase (Costs):", error);
+      throw error;
+    }
   },
 
   async clearAllData(): Promise<void> {
@@ -256,12 +240,12 @@ export const db = {
   },
 
   async seedData(currentAdmin: User): Promise<void> {
-     // Implementação de semente pode ser adicionada aqui se necessário
+     // Implementação de semente
   },
 
   async exportFullBackup(): Promise<string> {
     const [users, cycles, costs] = await Promise.all([this.getUsers(), this.getCycles(), this.getCosts()]);
-    return JSON.stringify({ users, cycles, costs, version: '5.0_final_fix' });
+    return JSON.stringify({ users, cycles, costs, version: '5.1_fixed' });
   },
 
   async importBackup(jsonString: string): Promise<void> {
