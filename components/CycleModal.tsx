@@ -22,6 +22,14 @@ export const CycleModal: React.FC<CycleModalProps> = ({ isOpen, onClose, onSave,
     accounts: 1 
   });
 
+  const formatBRL = (val: number) => 
+    val.toLocaleString('pt-BR', { 
+      style: 'currency', 
+      currency: 'BRL',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+
   useEffect(() => {
     if (editingCycle) {
       setFormData({
@@ -66,69 +74,84 @@ export const CycleModal: React.FC<CycleModalProps> = ({ isOpen, onClose, onSave,
     });
   };
 
+  const currentInvested = Number(formData.deposit) + Number(formData.redeposit);
+  const currentReturn = Number(formData.withdraw) + Number(formData.chest) + Number(formData.cooperation);
+  const currentProfit = currentReturn - currentInvested;
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md overflow-y-auto">
-      <div className="relative bg-[#121212] w-full max-w-lg rounded-[2rem] border border-white/5 shadow-2xl p-6 md:p-10 my-auto animate-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between mb-8">
-          <h2 className="text-xl font-black uppercase tracking-widest text-white">
-            {editingCycle ? 'Editar' : 'Novo'} <span className="text-yellow-500">Ciclo</span>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/95 backdrop-blur-xl overflow-y-auto">
+      <div className="relative bg-[#0c0c0c] w-full max-w-lg rounded-[2.5rem] border border-white/5 shadow-2xl p-8 md:p-10 animate-in zoom-in-95 duration-200">
+        <div className="flex items-center justify-between mb-10">
+          <h2 className="text-2xl font-black uppercase tracking-widest text-white">
+            {editingCycle ? 'Editar' : 'Lançar'} <span className="text-yellow-500">Ciclo</span>
           </h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors"><X size={24} /></button>
+          <button onClick={onClose} className="p-2 bg-white/5 text-zinc-500 hover:text-white rounded-xl transition-all"><X size={20} /></button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[9px] font-black uppercase text-zinc-500 ml-1">Nome da Operação</label>
-              <input type="text" className="w-full bg-black border border-white/5 rounded-xl py-3.5 px-4 text-sm text-white outline-none focus:border-yellow-500/50" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required placeholder="Ex: Banca Noite" />
+        <form onSubmit={handleSubmit} className="space-y-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase text-zinc-500 ml-1">Descrição</label>
+              <input type="text" className="w-full bg-black border border-white/5 rounded-2xl py-4 px-6 text-white outline-none focus:border-yellow-500/30 transition-all font-bold" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required placeholder="Ex: Banca Madrugada" />
             </div>
-            <div className="space-y-1.5">
-              <label className="text-[9px] font-black uppercase text-zinc-500 ml-1">Data</label>
-              <input type="text" className="w-full bg-black/50 border border-white/5 rounded-xl py-3.5 px-4 text-sm text-zinc-500 outline-none" value={formData.date} readOnly />
-            </div>
-          </div>
-
-          <div className="bg-white/5 p-4 rounded-2xl space-y-4">
-            <p className="text-[10px] font-black uppercase text-zinc-400 tracking-widest border-b border-white/5 pb-2">Investimento (Entrada)</p>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black uppercase text-zinc-500 ml-1 flex items-center gap-1.5"><Flame size={10} className="text-orange-500"/> Depósito</label>
-                <input type="number" step="0.01" className="w-full bg-black border border-white/5 rounded-xl py-3.5 px-4 text-sm text-white outline-none focus:border-yellow-500/30" value={formData.deposit} onChange={e => setFormData({...formData, deposit: Number(e.target.value)})} />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black uppercase text-zinc-500 ml-1 flex items-center gap-1.5"><RefreshCw size={10} className="text-blue-500"/> Re-depósito</label>
-                <input type="number" step="0.01" className="w-full bg-black border border-white/5 rounded-xl py-3.5 px-4 text-sm text-white outline-none focus:border-yellow-500/30" value={formData.redeposit} onChange={e => setFormData({...formData, redeposit: Number(e.target.value)})} />
-              </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase text-zinc-500 ml-1">Data Fixada</label>
+              <div className="w-full bg-white/[0.02] border border-white/5 rounded-2xl py-4 px-6 text-zinc-600 text-sm font-bold tracking-widest">{formData.date}</div>
             </div>
           </div>
 
-          <div className="bg-white/5 p-4 rounded-2xl space-y-4">
-            <p className="text-[10px] font-black uppercase text-zinc-400 tracking-widest border-b border-white/5 pb-2">Retorno (Saída)</p>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-[8px] font-black text-zinc-500 uppercase ml-1 flex items-center gap-1"><LogOut size={8}/> Saque</label>
-                <input type="number" step="0.01" className="w-full bg-black border border-white/5 rounded-xl py-3 px-3 text-xs text-white outline-none focus:border-yellow-500/30" value={formData.withdraw} onChange={e => setFormData({...formData, withdraw: Number(e.target.value)})} />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[8px] font-black text-zinc-500 uppercase ml-1 flex items-center gap-1"><Wallet size={8}/> Baú</label>
-                <input type="number" step="0.01" className="w-full bg-black border border-white/5 rounded-xl py-3 px-3 text-xs text-white outline-none focus:border-yellow-500/30" value={formData.chest} onChange={e => setFormData({...formData, chest: Number(e.target.value)})} />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[8px] font-black text-zinc-500 uppercase ml-1 flex items-center gap-1"><Users size={8}/> Coop.</label>
-                <input type="number" step="0.01" className="w-full bg-black border border-white/5 rounded-xl py-3 px-3 text-xs text-white outline-none focus:border-yellow-500/30" value={formData.cooperation} onChange={e => setFormData({...formData, cooperation: Number(e.target.value)})} />
-              </div>
+          <div className="grid grid-cols-2 gap-6">
+             <div className="space-y-4 p-5 bg-white/[0.02] border border-white/5 rounded-[1.5rem]">
+                <p className="text-[9px] font-black uppercase text-zinc-500 tracking-widest border-b border-white/5 pb-2">Entrada</p>
+                <div className="space-y-4">
+                   <div className="space-y-1.5">
+                     <label className="text-[9px] font-black uppercase text-zinc-600 ml-1 flex items-center gap-1.5"><Flame size={10} className="text-orange-500"/> Depósito</label>
+                     <input type="number" step="0.01" className="w-full bg-black border border-white/5 rounded-xl py-3 px-4 text-sm text-white outline-none focus:border-yellow-500/20 font-bold" value={formData.deposit} onChange={e => setFormData({...formData, deposit: Number(e.target.value)})} />
+                   </div>
+                   <div className="space-y-1.5">
+                     <label className="text-[9px] font-black uppercase text-zinc-600 ml-1 flex items-center gap-1.5"><RefreshCw size={10} className="text-blue-500"/> Re-dep.</label>
+                     <input type="number" step="0.01" className="w-full bg-black border border-white/5 rounded-xl py-3 px-4 text-sm text-white outline-none focus:border-yellow-500/20 font-bold" value={formData.redeposit} onChange={e => setFormData({...formData, redeposit: Number(e.target.value)})} />
+                   </div>
+                </div>
+             </div>
+
+             <div className="space-y-4 p-5 bg-white/[0.02] border border-white/5 rounded-[1.5rem]">
+                <p className="text-[9px] font-black uppercase text-zinc-500 tracking-widest border-b border-white/5 pb-2">Saída</p>
+                <div className="space-y-4">
+                   <div className="space-y-1.5">
+                     <label className="text-[9px] font-black uppercase text-zinc-600 ml-1 flex items-center gap-1.5"><LogOut size={10} className="text-emerald-500"/> Saque</label>
+                     <input type="number" step="0.01" className="w-full bg-black border border-white/5 rounded-xl py-3 px-4 text-sm text-white outline-none focus:border-emerald-500/20 font-bold" value={formData.withdraw} onChange={e => setFormData({...formData, withdraw: Number(e.target.value)})} />
+                   </div>
+                   <div className="space-y-1.5">
+                     <label className="text-[9px] font-black uppercase text-zinc-600 ml-1 flex items-center gap-1.5"><Wallet size={10} className="text-yellow-500"/> Baú</label>
+                     <input type="number" step="0.01" className="w-full bg-black border border-white/5 rounded-xl py-3 px-4 text-sm text-white outline-none focus:border-yellow-500/20 font-bold" value={formData.chest} onChange={e => setFormData({...formData, chest: Number(e.target.value)})} />
+                   </div>
+                </div>
+             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase text-zinc-500 ml-1 flex items-center gap-1.5"><Users size={12}/> Cooperação</label>
+              <input type="number" step="0.01" className="w-full bg-black border border-white/5 rounded-2xl py-4 px-6 text-white outline-none focus:border-white/20 transition-all font-bold" value={formData.cooperation} onChange={e => setFormData({...formData, cooperation: Number(e.target.value)})} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase text-zinc-500 ml-1">Contas Geradas</label>
+              <input type="number" className="w-full bg-black border border-white/5 rounded-2xl py-4 px-6 text-white outline-none focus:border-white/20 transition-all font-bold" value={formData.accounts} onChange={e => setFormData({...formData, accounts: Number(e.target.value)})} />
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-[9px] font-black text-zinc-500 uppercase ml-1">Accounts Geradas</label>
-            <input type="number" className="w-full bg-black border border-white/5 rounded-xl py-3.5 px-4 text-sm text-white outline-none focus:border-yellow-500/30" value={formData.accounts} onChange={e => setFormData({...formData, accounts: Number(e.target.value)})} />
+          <div className="bg-white/5 p-6 rounded-[2rem] border border-white/5">
+             <div className="flex justify-between items-center text-xs font-black uppercase tracking-widest">
+                <span className="text-zinc-600">Lucro Operacional Estimado</span>
+                <span className={currentProfit >= 0 ? 'text-emerald-500' : 'text-red-500'}>{formatBRL(currentProfit)}</span>
+             </div>
           </div>
 
           <div className="flex gap-4 pt-4">
-            <button type="button" onClick={onClose} className="flex-1 py-4 text-[10px] font-black uppercase text-zinc-600">Cancelar</button>
-            <button type="submit" className="flex-1 bg-yellow-500 text-black py-4 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-yellow-500/10 hover:bg-yellow-400 transition-all">
-              {editingCycle ? 'Atualizar Ciclo' : 'Salvar Ciclo'}
+            <button type="button" onClick={onClose} className="flex-1 py-4 text-[11px] font-black uppercase text-zinc-600 hover:text-white transition-colors">Cancelar</button>
+            <button type="submit" className="flex-1 bg-yellow-500 hover:bg-yellow-400 text-black py-4 rounded-2xl text-[11px] font-black uppercase shadow-xl transition-all font-black">
+              {editingCycle ? 'Atualizar Dados' : 'Gravar Operação'}
             </button>
           </div>
         </form>

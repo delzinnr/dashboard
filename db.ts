@@ -113,7 +113,6 @@ export const db = {
     }));
   },
 
-  // Função genérica de Salvar (Cria ou Atualiza)
   async saveCycle(cycle: Cycle): Promise<void> {
     const { error } = await supabase.from('cycles').upsert({
       id: String(cycle.id),
@@ -134,10 +133,7 @@ export const db = {
       owner_admin_id: cycle.ownerAdminId
     });
 
-    if (error) {
-      console.error("Erro ao salvar ciclo:", error);
-      throw new Error(`Falha ao salvar: ${error.message}`);
-    }
+    if (error) throw new Error(`Falha ao salvar: ${error.message}`);
   },
 
   async saveAllCycles(cycles: Cycle[]): Promise<void> {
@@ -166,25 +162,13 @@ export const db = {
 
   async deleteCycle(id: string): Promise<void> {
     if (!id) return;
-    
-    const { error } = await supabase
-      .from('cycles')
-      .delete()
-      .eq('id', String(id));
-
-    if (error) {
-      console.error("Erro de exclusão no Supabase (Cycles):", error);
-      throw new Error(`Erro ao deletar do banco: ${error.message}`);
-    }
+    const { error } = await supabase.from('cycles').delete().eq('id', String(id));
+    if (error) throw new Error(`Erro ao deletar: ${error.message}`);
   },
 
   async deleteMultipleCycles(ids: string[]): Promise<void> {
     if (!ids || ids.length === 0) return;
-    const { error } = await supabase
-      .from('cycles')
-      .delete()
-      .in('id', ids.map(id => String(id)));
-
+    const { error } = await supabase.from('cycles').delete().in('id', ids.map(id => String(id)));
     if (error) throw new Error(error.message);
   },
 
@@ -215,22 +199,12 @@ export const db = {
       operator_name: cost.operatorName,
       owner_admin_id: cost.ownerAdminId
     });
-    if (error) {
-      console.error("Erro ao salvar custo:", error);
-      throw error;
-    }
+    if (error) throw error;
   },
 
   async deleteCost(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('costs')
-      .delete()
-      .eq('id', String(id));
-      
-    if (error) {
-      console.error("Erro de exclusão no Supabase (Costs):", error);
-      throw error;
-    }
+    const { error } = await supabase.from('costs').delete().eq('id', String(id));
+    if (error) throw new Error(`Erro ao deletar: ${error.message}`);
   },
 
   async clearAllData(): Promise<void> {
@@ -240,12 +214,12 @@ export const db = {
   },
 
   async seedData(currentAdmin: User): Promise<void> {
-     // Implementação de semente
+     // Seed logic
   },
 
   async exportFullBackup(): Promise<string> {
     const [users, cycles, costs] = await Promise.all([this.getUsers(), this.getCycles(), this.getCosts()]);
-    return JSON.stringify({ users, cycles, costs, version: '5.1_fixed' });
+    return JSON.stringify({ users, cycles, costs, version: '6.0_daily_logic' });
   },
 
   async importBackup(jsonString: string): Promise<void> {

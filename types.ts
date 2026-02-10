@@ -26,8 +26,8 @@ export interface Cycle {
   invested: number;
   return: number;
   accounts: number;
-  profit: number;
-  commissionValue: number;
+  profit: number; // Agora representa o Lucro Bruto da operação (Retorno - Investimento)
+  commissionValue: number; // Será calculado dinamicamente ou mantido como referência
   operatorId: string;
   operatorName: string;
   ownerAdminId: string;

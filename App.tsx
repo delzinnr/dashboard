@@ -40,7 +40,7 @@ const App: React.FC = () => {
       setCycles(fetchedCycles);
       setCosts(fetchedCosts);
     } catch (error) {
-      console.error("Erro ao carregar dados do servidor:", error);
+      console.error("Erro ao carregar dados:", error);
     } finally {
       setIsLoading(false);
     }
@@ -70,100 +70,54 @@ const App: React.FC = () => {
     sessionStorage.removeItem('fm_current_user');
   };
 
-  const handleExportData = async () => {
-    setIsSyncing(true);
-    try {
-      const data = await db.exportFullBackup();
-      const blob = new Blob([data], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `backup-smk-${new Date().toISOString().split('T')[0]}.json`;
-      a.click();
-    } catch (err) {
-      alert('Erro ao exportar dados.');
-    }
-    setIsSyncing(false);
-  };
-
-  const handleImportData = async (file: File) => {
-    setIsSyncing(true);
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const json = e.target?.result as string;
-        await db.importBackup(json);
-        await loadAllData();
-        alert('Dados sincronizados com o banco de dados!');
-      } catch (err) {
-        alert('Erro ao importar arquivo.');
-      } finally {
-        setIsSyncing(false);
-      }
-    };
-    reader.readAsText(file);
-  };
-
   const myAdminId = useMemo(() => {
     if (!currentUser) return '';
     return currentUser.role === 'admin' ? currentUser.id : (currentUser.parentId || '');
   }, [currentUser]);
 
+  // Função para adicionar ou atualizar ciclo
+  // Agora não tenta calcular comissão final por linha, apenas armazena o lucro operacional bruto
   const addOrUpdateCycle = async (cycleData: Omit<Cycle, 'id' | 'profit' | 'operatorId' | 'operatorName' | 'commissionValue' | 'ownerAdminId'>, existingId?: string) => {
     if (!currentUser || !myAdminId) return;
     setIsSyncing(true);
     try {
       const grossProfit = cycleData.return - cycleData.invested;
-      const commValue = grossProfit > 0 ? (grossProfit * (currentUser.commission / 100)) : 0;
-      const netProfit = grossProfit - commValue;
       
       const cycle: Cycle = {
         ...cycleData,
         id: existingId || `c-${Date.now()}`,
-        profit: Number(netProfit.toFixed(2)),
-        commissionValue: Number(commValue.toFixed(2)),
+        profit: Number(grossProfit.toFixed(2)),
+        commissionValue: 0, // Será ignorado e calculado dinamicamente no Dashboard Diário
         operatorId: currentUser.id,
         operatorName: currentUser.name,
         ownerAdminId: myAdminId
       };
       
       await db.saveCycle(cycle);
-      
-      if (existingId) {
-        setCycles(prev => prev.map(c => c.id === existingId ? cycle : c));
-      } else {
-        setCycles(prev => [cycle, ...prev]);
-      }
+      await loadAllData(); // Recarrega para garantir sincronia com os custos do dia
     } catch (err: any) {
-      alert(`Erro ao salvar no servidor: ${err.message}`);
+      alert(`Erro: ${err.message}`);
     }
     setIsSyncing(false);
   };
 
   const deleteCycle = async (id: string) => {
-    if (!confirm('Excluir este ciclo permanentemente?')) return;
+    if (!confirm('Excluir este ciclo?')) return;
     setIsSyncing(true);
     try {
       await db.deleteCycle(id);
       setCycles(prev => prev.filter(c => c.id !== id));
-    } catch (err: any) { 
-      console.error(err);
-      alert(`FALHA NA EXCLUSÃO: ${err.message}\n\nCertifique-se de que executou o comando SQL no Supabase para converter os IDs em TEXT.`); 
-    }
+    } catch (err: any) { alert(err.message); }
     setIsSyncing(false);
   };
 
   const deleteMultipleCycles = async (ids: string[]) => {
-    if (!ids || ids.length === 0) return;
-    if (!confirm(`Deseja excluir permanentemente ${ids.length} ciclo(s)?`)) return;
+    if (!ids.length || !confirm(`Excluir ${ids.length} ciclos?`)) return;
     setIsSyncing(true);
     try {
       await db.deleteMultipleCycles(ids);
       setCycles(prev => prev.filter(c => !ids.includes(c.id)));
-    } catch (err: any) {
-      console.error(err);
-      alert(`FALHA NA EXCLUSÃO EM MASSA: ${err.message}`);
-    }
+    } catch (err: any) { alert(err.message); }
     setIsSyncing(false);
   };
 
@@ -180,21 +134,17 @@ const App: React.FC = () => {
       };
       await db.saveCost(cost);
       setCosts(prev => [cost, ...prev]);
-    } catch (err) {
-      alert('Erro ao salvar custo no servidor.');
-    }
+    } catch (err) { alert('Erro ao salvar custo.'); }
     setIsSyncing(false);
   };
 
   const deleteCost = async (id: string) => {
-    if (!confirm('Excluir este custo permanentemente?')) return;
+    if (!confirm('Excluir custo?')) return;
     setIsSyncing(true);
     try {
       await db.deleteCost(id);
       setCosts(prev => prev.filter(c => c.id !== id));
-    } catch (err: any) { 
-      alert(`Erro ao excluir custo: ${err.message}`); 
-    }
+    } catch (err: any) { alert(err.message); }
     setIsSyncing(false);
   };
 
@@ -205,36 +155,13 @@ const App: React.FC = () => {
       const updatedAllUsers = allUsers.map(u => u.id === userId ? { ...u, commission: newCommission } : u);
       await db.saveUsers(updatedAllUsers);
       setUsers(updatedAllUsers);
-      
-      const allCycles = await db.getCycles();
-      const updatedAllCycles = allCycles.map(c => {
-        if (c.operatorId === userId) {
-          const grossProfit = c.return - c.invested;
-          const newCommValue = grossProfit > 0 ? (grossProfit * (newCommission / 100)) : 0;
-          const newNetProfit = grossProfit - newCommValue;
-          return { 
-            ...c, 
-            commissionValue: Number(newCommValue.toFixed(2)),
-            profit: Number(newNetProfit.toFixed(2))
-          };
-        }
-        return c;
-      });
-      await db.saveAllCycles(updatedAllCycles);
-      setCycles(updatedAllCycles);
-    } catch (err) { alert('Erro ao atualizar no servidor.'); }
+      // Recarrega tudo para que os cálculos dinâmicos no dashboard reflitam a nova taxa
+      await loadAllData();
+    } catch (err) { alert('Erro ao atualizar comissão.'); }
     setIsSyncing(false);
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center">
-        <RefreshCw className="animate-spin text-yellow-500 mb-4" size={32} />
-        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500">Conectando ao Banco de Dados...</p>
-      </div>
-    );
-  }
-
+  if (isLoading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center"><RefreshCw className="animate-spin text-yellow-500" /></div>;
   if (!isLoggedIn || !currentUser) return <LoginView onLogin={handleLogin} />;
 
   const filteredCycles = currentUser.role === 'admin' 
@@ -254,10 +181,26 @@ const App: React.FC = () => {
       currentUser={currentUser} 
       onLogout={handleLogout} 
       isSyncing={isSyncing}
-      onExportData={handleExportData}
-      onImportData={handleImportData}
+      onExportData={async () => {
+        const data = await db.exportFullBackup();
+        const blob = new Blob([data], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `backup-${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+      }}
+      onImportData={async (file) => {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          await db.importBackup(e.target?.result as string);
+          await loadAllData();
+          alert('Backup restaurado!');
+        };
+        reader.readAsText(file);
+      }}
     >
-      {currentView === 'dashboard' && <Dashboard cycles={filteredCycles} costs={filteredCosts} userRole={currentUser.role} currentUserId={currentUser.id} />}
+      {currentView === 'dashboard' && <Dashboard cycles={filteredCycles} costs={filteredCosts} userRole={currentUser.role} currentUserId={currentUser.id} teamMembers={users} />}
       {currentView === 'cycles' && <CyclesView cycles={filteredCycles} onAddCycle={addOrUpdateCycle} onDeleteCycle={deleteCycle} onDeleteMultipleCycles={deleteMultipleCycles} userRole={currentUser.role} />}
       {currentView === 'costs' && <CostsView costs={filteredCosts} onAddCost={addCost} onDeleteCost={deleteCost} userRole={currentUser.role} />}
       {currentView === 'team' && currentUser.role === 'admin' && (
@@ -265,32 +208,15 @@ const App: React.FC = () => {
           users={myTeam} 
           onUpdateCommission={updateCommission} 
           onAddOperator={async (u) => {
-            setIsSyncing(true);
-            try {
-              const op: User = { ...u, id: `op-${Date.now()}`, role: 'operator', parentId: currentUser.id };
-              await db.saveUsers([op]);
-              const updatedFullList = await db.getUsers();
-              setUsers(updatedFullList);
-            } catch (err) { alert('Erro ao criar operador no servidor.'); }
-            setIsSyncing(false);
+            const op: User = { ...u, id: `op-${Date.now()}`, role: 'operator', parentId: currentUser.id };
+            await db.saveUsers([op]);
+            await loadAllData();
           }}
           onDeleteOperator={async (id) => {
-            setIsSyncing(true);
-            try {
-              await db.deleteUser(id);
-              const updatedFullList = await db.getUsers();
-              setUsers(updatedFullList);
-            } catch (err) { alert('Erro ao remover operador no servidor.'); }
-            setIsSyncing(false);
+            await db.deleteUser(id);
+            await loadAllData();
           }}
         />
-      )}
-      {(currentView === 'team' || currentView === 'goals') && currentUser.role !== 'admin' && (
-        <div className="flex flex-col items-center justify-center h-[60vh] text-zinc-500 text-center px-6">
-          <ShieldAlert size={48} className="mb-4 text-zinc-800" />
-          <p className="text-xl font-black uppercase tracking-widest text-zinc-700">Acesso Restrito</p>
-          <p className="text-sm mt-2">Esta seção é exclusiva para Gerentes Master.</p>
-        </div>
       )}
     </Layout>
   );
