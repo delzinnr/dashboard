@@ -13,7 +13,8 @@ import {
   Loader2,
   Download,
   Upload,
-  Trash2
+  Trash2,
+  Database
 } from 'lucide-react';
 import { View, User } from '../types';
 import { db } from '../db';
@@ -40,6 +41,7 @@ export const Layout: React.FC<LayoutProps> = ({
   onImportData
 }) => {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [isSeeding, setIsSeeding] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const navItems = [
@@ -49,6 +51,20 @@ export const Layout: React.FC<LayoutProps> = ({
     ...(currentUser.role === 'admin' ? [{ id: 'team' as View, icon: UsersIcon, label: 'Equipe' }] : []),
     { id: 'goals' as View, icon: Target, label: 'Metas' },
   ];
+
+  const handleSeedData = async () => {
+    if (!confirm('Deseja gerar dados de teste? Isso adicionará novos operadores, ciclos e custos para demonstração.')) return;
+    setIsSeeding(true);
+    try {
+      await db.seedData(currentUser);
+      alert('Dados de teste gerados com sucesso!');
+      window.location.reload();
+    } catch (err) {
+      alert('Erro ao gerar dados de teste.');
+    } finally {
+      setIsSeeding(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#050505] text-white flex flex-col">
@@ -79,8 +95,8 @@ export const Layout: React.FC<LayoutProps> = ({
 
         <div className="flex items-center gap-2">
           <div className="hidden xs:flex items-center gap-2 px-2 py-1 bg-white/5 rounded-full border border-white/5">
-            {isSyncing ? <Loader2 size={10} className="text-yellow-500 animate-spin" /> : <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>}
-            <span className="text-[8px] font-black uppercase text-zinc-500 tracking-widest">{isSyncing ? 'Sinc' : 'Online'}</span>
+            {isSyncing || isSeeding ? <Loader2 size={10} className="text-yellow-500 animate-spin" /> : <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>}
+            <span className="text-[8px] font-black uppercase text-zinc-500 tracking-widest">{(isSyncing || isSeeding) ? 'Sinc' : 'Online'}</span>
           </div>
 
           <div className="relative">
@@ -95,6 +111,16 @@ export const Layout: React.FC<LayoutProps> = ({
                 <div className="px-3 py-2 border-b border-white/5 mb-1">
                   <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">Opções</p>
                 </div>
+                
+                {currentUser.role === 'admin' && (
+                  <>
+                    <button onClick={handleSeedData} disabled={isSeeding} className="w-full flex items-center gap-3 px-3 py-2.5 text-yellow-500/80 hover:bg-yellow-500/5 rounded-xl text-[11px] font-bold">
+                      <Database size={14} />Gerar Dados Teste
+                    </button>
+                    <div className="h-px bg-white/5 my-1"></div>
+                  </>
+                )}
+
                 <button onClick={() => { onExportData(); setShowUserDropdown(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-zinc-400 hover:bg-white/5 rounded-xl text-[11px] font-bold">
                   <Download size={14} />Backup Local
                 </button>

@@ -11,13 +11,18 @@ export interface User {
   role: Role;
   commission: number;
   avatar?: string;
-  parentId?: string; // ID do Admin que criou este operador
+  parentId?: string;
 }
 
 export interface Cycle {
   id: string;
   name: string;
-  date: string; // Formato DD/MM/YYYY
+  date: string;
+  deposit: number;
+  redeposit: number;
+  withdraw: number;
+  chest: number;
+  cooperation: number;
   invested: number;
   return: number;
   accounts: number;
@@ -25,7 +30,7 @@ export interface Cycle {
   commissionValue: number;
   operatorId: string;
   operatorName: string;
-  ownerAdminId: string; // ID do Admin dono deste dado
+  ownerAdminId: string;
 }
 
 export interface Cost {
@@ -36,7 +41,7 @@ export interface Cost {
   type: CostType;
   operatorId: string;
   operatorName: string;
-  ownerAdminId: string; // ID do Admin dono deste dado
+  ownerAdminId: string;
 }
 
 export type View = 'dashboard' | 'cycles' | 'costs' | 'team' | 'goals';

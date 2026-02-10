@@ -24,7 +24,6 @@ const App: React.FC = () => {
   const loadAllData = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Checar login persistente antes de buscar tudo
       const savedUser = localStorage.getItem('fm_current_user') || sessionStorage.getItem('fm_current_user');
       if (savedUser) {
         const parsed = JSON.parse(savedUser);
@@ -54,16 +53,17 @@ const App: React.FC = () => {
   const handleLogin = (user: User, remember: boolean) => {
     setIsLoggedIn(true);
     setCurrentUser(user);
+    setCurrentView('dashboard');
     const storage = remember ? localStorage : sessionStorage;
     storage.setItem('fm_is_logged', 'true');
     storage.setItem('fm_current_user', JSON.stringify(user));
-    // Recarregar dados após login para garantir contexto correto
     loadAllData();
   };
 
   const handleLogout = () => {
     setIsLoggedIn(false);
     setCurrentUser(null);
+    setCurrentView('dashboard');
     localStorage.removeItem('fm_is_logged');
     localStorage.removeItem('fm_current_user');
     sessionStorage.removeItem('fm_is_logged');
@@ -109,28 +109,33 @@ const App: React.FC = () => {
     return currentUser.role === 'admin' ? currentUser.id : (currentUser.parentId || '');
   }, [currentUser]);
 
-  const addCycle = async (newCycle: Omit<Cycle, 'id' | 'profit' | 'operatorId' | 'operatorName' | 'commissionValue' | 'ownerAdminId'>) => {
+  const addOrUpdateCycle = async (cycleData: Omit<Cycle, 'id' | 'profit' | 'operatorId' | 'operatorName' | 'commissionValue' | 'ownerAdminId'>, existingId?: string) => {
     if (!currentUser || !myAdminId) return;
     setIsSyncing(true);
     try {
-      const grossProfit = newCycle.return - newCycle.invested;
+      const grossProfit = cycleData.return - cycleData.invested;
       const commValue = grossProfit > 0 ? (grossProfit * (currentUser.commission / 100)) : 0;
       const netProfit = grossProfit - commValue;
       
       const cycle: Cycle = {
-        ...newCycle,
-        id: `c-${Date.now()}`,
+        ...cycleData,
+        id: existingId || `c-${Date.now()}`,
         profit: Number(netProfit.toFixed(2)),
         commissionValue: Number(commValue.toFixed(2)),
         operatorId: currentUser.id,
         operatorName: currentUser.name,
         ownerAdminId: myAdminId
       };
+      
       await db.saveCycle(cycle);
-      // Atualizar lista local para feedback imediato
-      setCycles(prev => [cycle, ...prev]);
-    } catch (err) {
-      alert('Erro ao salvar ciclo no servidor.');
+      
+      if (existingId) {
+        setCycles(prev => prev.map(c => c.id === existingId ? cycle : c));
+      } else {
+        setCycles(prev => [cycle, ...prev]);
+      }
+    } catch (err: any) {
+      alert(`Erro ao salvar no servidor: ${err.message || 'Verifique se as novas colunas foram adicionadas ao Supabase.'}`);
     }
     setIsSyncing(false);
   };
@@ -170,7 +175,10 @@ const App: React.FC = () => {
     try {
       await db.deleteCycle(id);
       setCycles(prev => prev.filter(c => c.id !== id));
-    } catch (err) { alert('Erro ao excluir no servidor.'); }
+    } catch (err) { 
+      console.error(err);
+      alert('Erro ao excluir no servidor.'); 
+    }
     setIsSyncing(false);
   };
 
@@ -233,8 +241,8 @@ const App: React.FC = () => {
       onExportData={handleExportData}
       onImportData={handleImportData}
     >
-      {currentView === 'dashboard' && <Dashboard cycles={filteredCycles} costs={filteredCosts} userRole={currentUser.role} />}
-      {currentView === 'cycles' && <CyclesView cycles={filteredCycles} onAddCycle={addCycle} onDeleteCycle={deleteCycle} userRole={currentUser.role} />}
+      {currentView === 'dashboard' && <Dashboard cycles={filteredCycles} costs={filteredCosts} userRole={currentUser.role} currentUserId={currentUser.id} />}
+      {currentView === 'cycles' && <CyclesView cycles={filteredCycles} onAddCycle={addOrUpdateCycle} onDeleteCycle={deleteCycle} userRole={currentUser.role} />}
       {currentView === 'costs' && <CostsView costs={filteredCosts} onAddCost={addCost} onDeleteCost={deleteCost} userRole={currentUser.role} />}
       {currentView === 'team' && currentUser.role === 'admin' && (
         <TeamView 

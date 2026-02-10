@@ -1,26 +1,42 @@
 
 import React, { useState, useMemo } from 'react';
-import { Plus, Trash2, Search, TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
-import { Cycle, Role, Timeframe } from '../types';
+import { Plus, Trash2, Search, TrendingUp, TrendingDown, Edit3 } from 'lucide-react';
+import { Cycle, Role } from '../types';
 import { CycleModal } from './CycleModal';
 
 interface CyclesViewProps {
   cycles: Cycle[];
-  onAddCycle: (cycle: Omit<Cycle, 'id' | 'profit' | 'operatorId' | 'operatorName' | 'commissionValue' | 'ownerAdminId'>) => void;
+  onAddCycle: (cycle: Omit<Cycle, 'id' | 'profit' | 'operatorId' | 'operatorName' | 'commissionValue' | 'ownerAdminId'>, existingId?: string) => void;
   onDeleteCycle: (id: string) => void;
   userRole: Role;
 }
 
 export const CyclesView: React.FC<CyclesViewProps> = ({ cycles, onAddCycle, onDeleteCycle, userRole }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingCycle, setEditingCycle] = useState<Cycle | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [timeframe, setTimeframe] = useState<Timeframe>('all');
 
   const formatBRL = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   const filteredCycles = useMemo(() => {
     return cycles.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [cycles, searchTerm]);
+
+  const handleEdit = (cycle: Cycle) => {
+    setEditingCycle(cycle);
+    setIsModalOpen(true);
+  };
+
+  const handleAddNew = () => {
+    setEditingCycle(null);
+    setIsModalOpen(true);
+  };
+
+  const handleSave = (data: any) => {
+    onAddCycle(data, editingCycle?.id);
+    setIsModalOpen(false);
+    setEditingCycle(null);
+  };
 
   return (
     <div className="space-y-6">
@@ -30,7 +46,7 @@ export const CyclesView: React.FC<CyclesViewProps> = ({ cycles, onAddCycle, onDe
             <h1 className="text-2xl md:text-3xl font-black text-white">Ciclos <span className="text-zinc-600">Bancários</span></h1>
             <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mt-1">Gestão de Operações</p>
           </div>
-          <button onClick={() => setIsModalOpen(true)} className="flex lg:hidden items-center justify-center w-12 h-12 bg-yellow-500 text-black rounded-xl shadow-lg shadow-yellow-500/20">
+          <button onClick={handleAddNew} className="flex lg:hidden items-center justify-center w-12 h-12 bg-yellow-500 text-black rounded-xl shadow-lg shadow-yellow-500/20">
             <Plus size={24} strokeWidth={3} />
           </button>
         </div>
@@ -40,7 +56,7 @@ export const CyclesView: React.FC<CyclesViewProps> = ({ cycles, onAddCycle, onDe
             <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600" />
             <input type="text" placeholder="Buscar ciclo..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-[#111] border border-white/5 rounded-xl py-3.5 pl-11 pr-4 text-sm text-white outline-none focus:border-yellow-500/50" />
           </div>
-          <button onClick={() => setIsModalOpen(true)} className="hidden lg:flex items-center justify-center gap-3 px-8 py-3.5 bg-yellow-500 text-black rounded-xl text-xs font-black uppercase hover:bg-yellow-400 transition-all active:scale-95">
+          <button onClick={handleAddNew} className="hidden lg:flex items-center justify-center gap-3 px-8 py-3.5 bg-yellow-500 text-black rounded-xl text-xs font-black uppercase hover:bg-yellow-400 transition-all active:scale-95">
             <Plus size={18} strokeWidth={3} /> Novo Ciclo
           </button>
         </div>
@@ -61,7 +77,7 @@ export const CyclesView: React.FC<CyclesViewProps> = ({ cycles, onAddCycle, onDe
           </thead>
           <tbody className="divide-y divide-white/5">
             {filteredCycles.map(cycle => (
-              <tr key={cycle.id} className="hover:bg-white/[0.02]">
+              <tr key={cycle.id} className="hover:bg-white/[0.02] group">
                 <td className="px-8 py-6">
                   <p className="font-bold text-white text-sm">{cycle.name}</p>
                   <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-wider">{cycle.date} • {cycle.operatorName}</p>
@@ -71,7 +87,10 @@ export const CyclesView: React.FC<CyclesViewProps> = ({ cycles, onAddCycle, onDe
                 <td className={`px-8 py-6 font-black text-sm ${cycle.profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatBRL(cycle.profit)}</td>
                 <td className="px-8 py-6 font-black text-sm text-yellow-500">{formatBRL(cycle.commissionValue)}</td>
                 <td className="px-8 py-6 text-right">
-                  <button onClick={() => onDeleteCycle(cycle.id)} className="p-2 text-zinc-700 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
+                  <div className="flex items-center justify-end gap-2">
+                    <button onClick={() => handleEdit(cycle)} className="p-2 text-zinc-700 hover:text-blue-500 transition-colors opacity-0 group-hover:opacity-100"><Edit3 size={18} /></button>
+                    <button onClick={() => onDeleteCycle(cycle.id)} className="p-2 text-zinc-700 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={18} /></button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -88,7 +107,10 @@ export const CyclesView: React.FC<CyclesViewProps> = ({ cycles, onAddCycle, onDe
                 <h4 className="font-black text-sm text-white mb-0.5">{cycle.name}</h4>
                 <p className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">{cycle.date} • {cycle.operatorName}</p>
               </div>
-              <button onClick={() => onDeleteCycle(cycle.id)} className="p-2 bg-red-500/10 text-red-500 rounded-lg"><Trash2 size={16} /></button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => handleEdit(cycle)} className="p-2 bg-blue-500/10 text-blue-500 rounded-lg"><Edit3 size={16} /></button>
+                <button onClick={() => onDeleteCycle(cycle.id)} className="p-2 bg-red-500/10 text-red-500 rounded-lg"><Trash2 size={16} /></button>
+              </div>
             </div>
             
             <div className="grid grid-cols-2 gap-2 mb-4">
@@ -120,7 +142,12 @@ export const CyclesView: React.FC<CyclesViewProps> = ({ cycles, onAddCycle, onDe
         )}
       </div>
 
-      <CycleModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={onAddCycle} />
+      <CycleModal 
+        isOpen={isModalOpen} 
+        onClose={() => { setIsModalOpen(false); setEditingCycle(null); }} 
+        onSave={handleSave} 
+        editingCycle={editingCycle}
+      />
     </div>
   );
 };
