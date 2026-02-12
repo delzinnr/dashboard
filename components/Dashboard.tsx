@@ -1,16 +1,15 @@
 
 import React, { useMemo, useState } from 'react';
 import { 
-  Shield, 
-  DollarSign, 
-  Users, 
-  TrendingUp, 
-  Gem,
   BarChart3,
   LineChart as LineChartIcon,
   Calendar,
-  Clock,
-  Briefcase
+  TrendingUp,
+  ArrowUpRight,
+  ArrowDownRight,
+  Target,
+  User as UserIcon,
+  Zap
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -22,7 +21,8 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
-  Cell
+  Cell,
+  TooltipProps
 } from 'recharts';
 import { Role, Cycle, Cost, User, Timeframe } from '../types';
 
@@ -104,22 +104,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ cycles, costs, userRole, c
     const myInvested = myCycles.reduce((acc, c) => acc + c.invested, 0);
     const myExpenses = myCosts.reduce((acc, c) => acc + c.amount, 0);
     
-    // Lucro Operacional (Banca - Despesas)
     const myOperationalProfit = (myGrossReturn - myInvested) - myExpenses;
-
     const currentUserProfile = teamMembers.find(u => u.id === currentUserId);
     const myCommissionRate = currentUserProfile?.commission || 0;
-    
-    // Comissão gerada para o gerente baseada no lucro operacional
     const myGeneratedCommission = myOperationalProfit > 0 ? (myOperationalProfit * (myCommissionRate / 100)) : 0;
-
-    // Ganho Real do Operador: Lucro Operacional - Comissão Gerente
     const myNetRealProfit = myOperationalProfit - myGeneratedCommission;
 
     let teamCommissions = 0;
     let teamTotalReturn = 0;
     let teamTotalInvested = 0;
-    const operatorPerformance: Record<string, { name: string, value: number, volume: number }> = {};
+    const operatorPerformance: any[] = [];
 
     if (isAdmin) {
       const uniqueOpIds = new Set(filteredCycles.map(c => c.operatorId));
@@ -138,11 +132,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ cycles, costs, userRole, c
         const opNet = (opRet - opInv) - opExp;
         const comm = opNet > 0 ? (opNet * (rate / 100)) : 0;
 
-        operatorPerformance[opId] = { 
-          name: user?.name || opCycles[0]?.operatorName || 'Operador', 
-          value: Number(comm.toFixed(2)), 
-          volume: opRet 
-        };
+        operatorPerformance.push({
+          name: user?.name || opCycles[0]?.operatorName || 'Operador',
+          commission: Number(comm.toFixed(2)),
+          volume: opRet,
+          expenses: opExp,
+          netProfit: opNet,
+          roi: opInv > 0 ? ((opNet / opInv) * 100).toFixed(1) : '0'
+        });
         
         teamCommissions += comm;
         teamTotalReturn += opRet;
@@ -173,7 +170,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ cycles, costs, userRole, c
       teamTotalReturn,
       teamTotalInvested,
       chartData: Object.values(chartDataMap).sort((a,b) => parseDate(a.date).getTime() - parseDate(b.date).getTime()),
-      barData: Object.values(operatorPerformance).sort((a,b) => b.value - a.value)
+      barData: operatorPerformance.sort((a,b) => b.commission - a.commission)
     };
   }, [cycles, costs, currentUserId, teamMembers, isAdmin, timeframe, timeframeInfo]);
 
@@ -193,7 +190,46 @@ export const Dashboard: React.FC<DashboardProps> = ({ cycles, costs, userRole, c
     </div>
   );
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const AdminPerformanceTooltip = ({ active, payload }: TooltipProps<number, string>) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-[#0f0f0f] border border-white/10 p-5 rounded-[1.5rem] shadow-2xl backdrop-blur-xl min-w-[220px]">
+          <div className="flex items-center gap-3 mb-4 border-b border-white/5 pb-3">
+             <div className="w-8 h-8 rounded-lg bg-yellow-500/20 text-yellow-500 flex items-center justify-center font-black text-xs uppercase">
+               {data.name.charAt(0)}
+             </div>
+             <div>
+               <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest leading-none">Operador</p>
+               <p className="text-sm font-black text-white">{data.name}</p>
+             </div>
+          </div>
+          
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-[9px] font-bold text-zinc-500 uppercase">Volume Bruto</span>
+              <span className="text-[11px] font-bold text-white">{formatBRL(data.volume)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-[9px] font-bold text-zinc-500 uppercase">Despesas</span>
+              <span className="text-[11px] font-bold text-red-500">-{formatBRL(data.expenses)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-[9px] font-bold text-zinc-500 uppercase">Lucro Banca</span>
+              <span className="text-[11px] font-bold text-emerald-500">{formatBRL(data.netProfit)}</span>
+            </div>
+            <div className="pt-2 border-t border-white/5 flex justify-between items-center">
+              <span className="text-[9px] font-black text-yellow-500 uppercase">Sua Comissão</span>
+              <span className="text-[13px] font-black text-yellow-500">{formatBRL(data.commission)}</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-[#0f0f0f] border border-white/10 p-4 rounded-2xl shadow-2xl backdrop-blur-xl">
@@ -201,7 +237,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ cycles, costs, userRole, c
             {payload[0].payload.date || payload[0].payload.name}
           </p>
           <div className="space-y-1">
-            <p className="text-[9px] font-bold text-zinc-400 uppercase">Valor do Registro:</p>
+            <p className="text-[9px] font-bold text-zinc-400 uppercase">Registro:</p>
             <p className="text-sm font-black text-yellow-500">
               {formatBRL(payload[0].value)}
             </p>
@@ -270,17 +306,26 @@ export const Dashboard: React.FC<DashboardProps> = ({ cycles, costs, userRole, c
 
       {isAdmin && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-[#0c0c0c] border border-purple-500/10 p-8 rounded-[2rem]">
-            <p className="text-[9px] font-black text-zinc-600 uppercase mb-2 tracking-widest">Comissões (Ganhos Rede)</p>
-            <h4 className="text-3xl font-black text-purple-500">{formatBRL(dashboardData.teamCommissions)}</h4>
+          <div className="bg-[#0c0c0c] border border-purple-500/10 p-8 rounded-[2rem] flex items-center justify-between">
+            <div>
+              <p className="text-[9px] font-black text-zinc-600 uppercase mb-2 tracking-widest">Comissões (Ganhos Rede)</p>
+              <h4 className="text-3xl font-black text-purple-500">{formatBRL(dashboardData.teamCommissions)}</h4>
+            </div>
+            <ArrowUpRight size={24} className="text-purple-500/40" />
           </div>
-          <div className="bg-[#0c0c0c] border border-white/5 p-8 rounded-[2rem]">
-            <p className="text-[9px] font-black text-zinc-600 uppercase mb-2 tracking-widest">Volume Saída (Rede)</p>
-            <h4 className="text-3xl font-black text-white">{formatBRL(dashboardData.teamTotalReturn)}</h4>
+          <div className="bg-[#0c0c0c] border border-white/5 p-8 rounded-[2rem] flex items-center justify-between">
+            <div>
+              <p className="text-[9px] font-black text-zinc-600 uppercase mb-2 tracking-widest">Volume Saída (Rede)</p>
+              <h4 className="text-3xl font-black text-white">{formatBRL(dashboardData.teamTotalReturn)}</h4>
+            </div>
+            <TrendingUp size={24} className="text-white/20" />
           </div>
-          <div className="bg-[#0c0c0c] border border-white/5 p-8 rounded-[2rem]">
-            <p className="text-[9px] font-black text-zinc-600 uppercase mb-2 tracking-widest">Capital Girado (Rede)</p>
-            <h4 className="text-3xl font-black text-white">{formatBRL(dashboardData.teamTotalInvested)}</h4>
+          <div className="bg-[#0c0c0c] border border-white/5 p-8 rounded-[2rem] flex items-center justify-between">
+            <div>
+              <p className="text-[9px] font-black text-zinc-600 uppercase mb-2 tracking-widest">Capital Girado (Rede)</p>
+              <h4 className="text-3xl font-black text-white">{formatBRL(dashboardData.teamTotalInvested)}</h4>
+            </div>
+            <Target size={24} className="text-white/20" />
           </div>
         </div>
       )}
@@ -316,27 +361,84 @@ export const Dashboard: React.FC<DashboardProps> = ({ cycles, costs, userRole, c
         </div>
 
         <div className="bg-[#0c0c0c] border border-white/5 p-10 rounded-[2.5rem]">
-           <div className="flex items-center gap-4 mb-10">
-              <div className="p-3 bg-purple-500/10 rounded-xl text-purple-500"><BarChart3 size={20}/></div>
-              <h4 className="text-xs font-black uppercase text-white tracking-[0.2em]">Performance Equipe</h4>
+           <div className="flex items-center justify-between mb-10">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-purple-500/10 rounded-xl text-purple-500"><BarChart3 size={20}/></div>
+                <h4 className="text-xs font-black uppercase text-white tracking-[0.2em]">
+                  {isAdmin ? 'Ranking de Ganhos' : 'Performance Recente'}
+                </h4>
+              </div>
+              {isAdmin && (
+                <div className="px-3 py-1 bg-white/5 rounded-full border border-white/5">
+                   <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Ordenado por Comissão</span>
+                </div>
+              )}
            </div>
+           
            <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                 <BarChart data={isAdmin ? dashboardData.barData : dashboardData.chartData.slice(-5)}>
-                    <XAxis dataKey={isAdmin ? "name" : "displayName"} axisLine={false} tickLine={false} tick={{fill: '#555', fontSize: 9}} dy={10} />
-                    <YAxis hide />
+                 <BarChart 
+                    layout={isAdmin ? "vertical" : "horizontal"} 
+                    data={isAdmin ? dashboardData.barData : dashboardData.chartData.slice(-5)}
+                    margin={{ left: isAdmin ? 40 : 0 }}
+                  >
+                    <XAxis 
+                      type={isAdmin ? "number" : "category"}
+                      dataKey={isAdmin ? undefined : "displayName"} 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{fill: '#555', fontSize: 9}} 
+                      hide={isAdmin}
+                    />
+                    <YAxis 
+                      type={isAdmin ? "category" : "number"}
+                      dataKey={isAdmin ? "name" : undefined}
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{fill: '#888', fontSize: 9, fontWeight: 'bold'}}
+                      width={isAdmin ? 80 : 0}
+                      hide={!isAdmin}
+                    />
                     <Tooltip 
                       cursor={{fill: '#ffffff05'}}
-                      content={<CustomTooltip />}
+                      content={isAdmin ? <AdminPerformanceTooltip /> : <CustomTooltip />}
                     />
-                    <Bar dataKey={isAdmin ? "value" : "profit"} radius={[8, 8, 0, 0]}>
+                    <Bar 
+                      dataKey={isAdmin ? "commission" : "profit"} 
+                      radius={[0, 8, 8, 0]} 
+                      barSize={isAdmin ? 24 : undefined}
+                    >
                        {(isAdmin ? dashboardData.barData : dashboardData.chartData.slice(-5)).map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#eab308' : '#ca8a04'} />
+                          <Cell 
+                            key={`cell-${index}`} 
+                            fill={isAdmin ? '#a855f7' : (index % 2 === 0 ? '#eab308' : '#ca8a04')} 
+                          />
                        ))}
                     </Bar>
                  </BarChart>
               </ResponsiveContainer>
            </div>
+
+           {isAdmin && dashboardData.barData.length > 0 && (
+             <div className="mt-8 pt-6 border-t border-white/5 space-y-4">
+               <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Zap size={14} className="text-yellow-500" />
+                    <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Top Operador</span>
+                  </div>
+                  <span className="text-xs font-black text-white">{dashboardData.barData[0].name}</span>
+               </div>
+               <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp size={14} className="text-purple-500" />
+                    <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Média por Operador</span>
+                  </div>
+                  <span className="text-xs font-black text-white">
+                    {formatBRL(dashboardData.teamCommissions / dashboardData.barData.length)}
+                  </span>
+               </div>
+             </div>
+           )}
         </div>
       </section>
     </div>

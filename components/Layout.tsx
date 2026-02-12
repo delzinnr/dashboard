@@ -67,11 +67,11 @@ export const Layout: React.FC<LayoutProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white flex flex-col">
+    <div className="min-h-screen bg-[#050505] text-white flex flex-col relative">
       <input type="file" ref={fileInputRef} onChange={(e) => e.target.files?.[0] && onImportData(e.target.files[0])} accept=".json" className="hidden" />
 
-      {/* Header Compacto para Mobile */}
-      <header className="fixed top-0 left-0 right-0 h-14 md:h-16 bg-[#0a0a0a]/90 backdrop-blur-xl border-b border-white/5 z-50 px-4 md:px-8 flex items-center justify-between">
+      {/* Header Fixo com Z-Index Prioritário */}
+      <header className="fixed top-0 left-0 right-0 h-14 md:h-16 bg-[#0a0a0a]/90 backdrop-blur-xl border-b border-white/5 z-[60] px-4 md:px-8 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 bg-yellow-500 rounded-lg flex items-center justify-center text-black font-black text-[9px] italic">SMK</div>
           <span className="font-bold text-sm tracking-tight">Finance<span className="text-yellow-500">Master</span></span>
@@ -107,7 +107,7 @@ export const Layout: React.FC<LayoutProps> = ({
               <ChevronDown size={12} className="text-zinc-500 mr-1" />
             </button>
             {showUserDropdown && (
-              <div className="absolute right-0 mt-3 w-52 bg-[#0f0f0f] border border-white/10 rounded-2xl shadow-2xl p-2 z-[60] animate-in fade-in slide-in-from-top-2">
+              <div className="absolute right-0 mt-3 w-52 bg-[#0f0f0f] border border-white/10 rounded-2xl shadow-2xl p-2 z-[70] animate-in fade-in slide-in-from-top-2">
                 <div className="px-3 py-2 border-b border-white/5 mb-1">
                   <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">Opções</p>
                 </div>
@@ -145,13 +145,13 @@ export const Layout: React.FC<LayoutProps> = ({
         </div>
       </header>
 
-      {/* Conteúdo com Padding Mobile Seguro */}
-      <main className="flex-1 pt-14 pb-20 lg:pb-10 px-4 md:px-10 max-w-[1400px] mx-auto w-full">
+      {/* Main com Padding-Top Compensatório: pt-14 (mobile) e pt-20 (desktop) para evitar overlap */}
+      <main className="flex-1 pt-20 md:pt-28 pb-24 lg:pb-12 px-4 md:px-10 max-w-[1400px] mx-auto w-full">
         {children}
       </main>
 
-      {/* Navegação Mobile (Estilo App) */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#0a0a0a]/95 backdrop-blur-xl border-t border-white/10 z-50 flex items-center justify-around px-2">
+      {/* Navegação Mobile */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#0a0a0a]/95 backdrop-blur-xl border-t border-white/10 z-[60] flex items-center justify-around px-2">
         {navItems.map((item) => (
           <button
             key={item.id}
