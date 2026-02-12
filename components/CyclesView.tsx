@@ -200,7 +200,16 @@ export const CyclesView: React.FC<CyclesViewProps> = ({ cycles, onAddCycle, onDe
         </button>
       )}
 
-      <CycleModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingCycle(null); }} onSave={(data) => onAddCycle(data, editingCycle?.id)} editingCycle={editingCycle} />
+      <CycleModal 
+        isOpen={isModalOpen} 
+        onClose={() => { setIsModalOpen(false); setEditingCycle(null); }} 
+        onSave={(data) => {
+          onAddCycle(data, editingCycle?.id);
+          setIsModalOpen(false);
+          setEditingCycle(null);
+        }} 
+        editingCycle={editingCycle} 
+      />
     </div>
   );
 };
