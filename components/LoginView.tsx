@@ -1,14 +1,11 @@
 
 import React, { useState } from 'react';
-import { User, Lock, ArrowRight, ShieldCheck, AlertCircle, Fingerprint, Check } from 'lucide-react';
+import { User, Lock, ArrowRight, Fingerprint, Check, AlertCircle } from 'lucide-react';
 import { db } from '../db';
-import { User as UserType } from '../types';
+import { useAuth } from '../AuthContext';
 
-interface LoginViewProps {
-  onLogin: (user: UserType, remember: boolean) => void;
-}
-
-export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
+export const LoginView: React.FC = () => {
+  const { login } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -26,10 +23,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
       if (isRegisterMode) {
         if (!name.trim() || !username.trim() || !password.trim()) throw new Error('Preencha todos os campos.');
         const newUser = await db.registerAdmin({ name, username, password });
-        onLogin(newUser, rememberMe);
+        login(newUser, rememberMe);
       } else {
         const user = await db.login(username, password);
-        if (user) onLogin(user, rememberMe);
+        if (user) login(user, rememberMe);
         else throw new Error('Usuário ou senha incorretos.');
       }
     } catch (err: any) {

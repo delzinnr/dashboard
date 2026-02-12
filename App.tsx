@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ShieldAlert, RefreshCw } from 'lucide-react';
+import { RefreshCw, CheckCircle2 } from 'lucide-react';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
 import { CyclesView } from './components/CyclesView';
@@ -9,28 +9,27 @@ import { LoginView } from './components/LoginView';
 import { CostsView } from './components/CostsView';
 import { View, Cycle, User, Cost } from './types';
 import { db } from './db';
+import { useAuth } from './AuthContext';
 
 const App: React.FC = () => {
+  const { currentUser, isLoggedIn, isLoading: authLoading, logout } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [users, setUsers] = useState<User[]>([]);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [cycles, setCycles] = useState<Cycle[]>([]);
   const [costs, setCosts] = useState<Cost[]>([]);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const loadAllData = useCallback(async () => {
+    if (!isLoggedIn) return;
     setIsLoading(true);
     try {
-      const savedUser = localStorage.getItem('fm_current_user') || sessionStorage.getItem('fm_current_user');
-      if (savedUser) {
-        const parsed = JSON.parse(savedUser);
-        setCurrentUser(parsed);
-        setIsLoggedIn(true);
-      }
-
       const [fetchedUsers, fetchedCycles, fetchedCosts] = await Promise.all([
         db.getUsers(),
         db.getCycles(),
@@ -44,57 +43,36 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [isLoggedIn]);
 
   useEffect(() => {
-    loadAllData();
-  }, [loadAllData]);
-
-  const handleLogin = (user: User, remember: boolean) => {
-    setIsLoggedIn(true);
-    setCurrentUser(user);
-    setCurrentView('dashboard');
-    const storage = remember ? localStorage : sessionStorage;
-    storage.setItem('fm_is_logged', 'true');
-    storage.setItem('fm_current_user', JSON.stringify(user));
-    loadAllData();
-  };
-
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setCurrentUser(null);
-    setCurrentView('dashboard');
-    localStorage.removeItem('fm_is_logged');
-    localStorage.removeItem('fm_current_user');
-    sessionStorage.removeItem('fm_is_logged');
-    sessionStorage.removeItem('fm_current_user');
-  };
+    if (isLoggedIn) {
+      loadAllData();
+    }
+  }, [loadAllData, isLoggedIn]);
 
   const myAdminId = useMemo(() => {
     if (!currentUser) return '';
     return currentUser.role === 'admin' ? currentUser.id : (currentUser.parentId || '');
   }, [currentUser]);
 
-  // Função para adicionar ou atualizar ciclo
-  // Agora não tenta calcular comissão final por linha, apenas armazena o lucro operacional bruto
   const addOrUpdateCycle = async (cycleData: Omit<Cycle, 'id' | 'profit' | 'operatorId' | 'operatorName' | 'commissionValue' | 'ownerAdminId'>, existingId?: string) => {
     if (!currentUser || !myAdminId) return;
     setIsSyncing(true);
     try {
       const grossProfit = cycleData.return - cycleData.invested;
-      
       const cycle: Cycle = {
         ...cycleData,
         id: existingId || `c-${Date.now()}`,
         profit: Number(grossProfit.toFixed(2)),
-        commissionValue: 0, // Será ignorado e calculado dinamicamente no Dashboard Diário
+        commissionValue: 0,
         operatorId: currentUser.id,
         operatorName: currentUser.name,
         ownerAdminId: myAdminId
       };
-      
       await db.saveCycle(cycle);
-      await loadAllData(); // Recarrega para garantir sincronia com os custos do dia
+      await loadAllData();
+      showToast(existingId ? 'Ciclo atualizado com sucesso!' : 'Novo ciclo registrado!');
     } catch (err: any) {
       alert(`Erro: ${err.message}`);
     }
@@ -107,6 +85,7 @@ const App: React.FC = () => {
     try {
       await db.deleteCycle(id);
       setCycles(prev => prev.filter(c => c.id !== id));
+      showToast('Ciclo removido com sucesso!');
     } catch (err: any) { alert(err.message); }
     setIsSyncing(false);
   };
@@ -117,6 +96,7 @@ const App: React.FC = () => {
     try {
       await db.deleteMultipleCycles(ids);
       setCycles(prev => prev.filter(c => !ids.includes(c.id)));
+      showToast(`${ids.length} ciclos removidos com sucesso!`);
     } catch (err: any) { alert(err.message); }
     setIsSyncing(false);
   };
@@ -134,6 +114,7 @@ const App: React.FC = () => {
       };
       await db.saveCost(cost);
       setCosts(prev => [cost, ...prev]);
+      showToast('Despesa lançada com sucesso!');
     } catch (err) { alert('Erro ao salvar custo.'); }
     setIsSyncing(false);
   };
@@ -144,6 +125,7 @@ const App: React.FC = () => {
     try {
       await db.deleteCost(id);
       setCosts(prev => prev.filter(c => c.id !== id));
+      showToast('Despesa removida!');
     } catch (err: any) { alert(err.message); }
     setIsSyncing(false);
   };
@@ -155,14 +137,14 @@ const App: React.FC = () => {
       const updatedAllUsers = allUsers.map(u => u.id === userId ? { ...u, commission: newCommission } : u);
       await db.saveUsers(updatedAllUsers);
       setUsers(updatedAllUsers);
-      // Recarrega tudo para que os cálculos dinâmicos no dashboard reflitam a nova taxa
       await loadAllData();
+      showToast('Comissão atualizada!');
     } catch (err) { alert('Erro ao atualizar comissão.'); }
     setIsSyncing(false);
   };
 
-  if (isLoading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center"><RefreshCw className="animate-spin text-yellow-500" /></div>;
-  if (!isLoggedIn || !currentUser) return <LoginView onLogin={handleLogin} />;
+  if (authLoading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center"><RefreshCw className="animate-spin text-yellow-500" /></div>;
+  if (!isLoggedIn || !currentUser) return <LoginView />;
 
   const filteredCycles = currentUser.role === 'admin' 
     ? cycles.filter(c => c.ownerAdminId === currentUser.id)
@@ -179,7 +161,7 @@ const App: React.FC = () => {
       currentView={currentView} 
       onViewChange={setCurrentView} 
       currentUser={currentUser} 
-      onLogout={handleLogout} 
+      onLogout={logout} 
       isSyncing={isSyncing}
       onExportData={async () => {
         const data = await db.exportFullBackup();
@@ -211,12 +193,24 @@ const App: React.FC = () => {
             const op: User = { ...u, id: `op-${Date.now()}`, role: 'operator', parentId: currentUser.id };
             await db.saveUsers([op]);
             await loadAllData();
+            showToast('Novo operador adicionado!');
           }}
           onDeleteOperator={async (id) => {
             await db.deleteUser(id);
             await loadAllData();
+            showToast('Operador removido.');
           }}
         />
+      )}
+
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed bottom-20 md:bottom-10 right-4 md:right-10 z-[100] animate-in slide-in-from-right-10 duration-300">
+          <div className="bg-[#111]/90 backdrop-blur-xl border border-white/10 px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4">
+            <CheckCircle2 size={18} className="text-yellow-500" />
+            <span className="text-xs font-black uppercase tracking-widest text-white">{toast.message}</span>
+          </div>
+        </div>
       )}
     </Layout>
   );

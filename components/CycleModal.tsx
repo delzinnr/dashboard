@@ -22,8 +22,8 @@ export const CycleModal: React.FC<CycleModalProps> = ({ isOpen, onClose, onSave,
     accounts: 1 
   });
 
-  const formatBRL = (val: number) => 
-    val.toLocaleString('pt-BR', { 
+  const formatBRL = (val: number | undefined | null) => 
+    (val ?? 0).toLocaleString('pt-BR', { 
       style: 'currency', 
       currency: 'BRL',
       minimumFractionDigits: 2,
