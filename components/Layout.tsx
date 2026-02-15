@@ -67,11 +67,11 @@ export const Layout: React.FC<LayoutProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white flex flex-col relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#050505] text-white flex flex-col relative">
       <input type="file" ref={fileInputRef} onChange={(e) => e.target.files?.[0] && onImportData(e.target.files[0])} accept=".json" className="hidden" />
 
-      {/* Header Fixo com Camada de Vidro (Glassmorphism) */}
-      <header className="fixed top-0 left-0 right-0 h-16 md:h-20 bg-[#0a0a0a]/80 backdrop-blur-2xl border-b border-white/5 z-[60] px-4 md:px-10 flex items-center justify-between">
+      {/* Header Fixo - Z-Index 60 */}
+      <header className="fixed top-0 left-0 right-0 h-16 md:h-20 bg-[#0a0a0a]/90 backdrop-blur-2xl border-b border-white/5 z-[60] px-4 md:px-10 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 md:w-10 md:h-10 bg-yellow-500 rounded-xl flex items-center justify-center text-black font-black text-xs italic shadow-lg shadow-yellow-500/20">SMK</div>
           <div className="flex flex-col">
@@ -150,14 +150,12 @@ export const Layout: React.FC<LayoutProps> = ({
         </div>
       </header>
 
-      {/* Main Container com Padding Estratégico para compensar o Header */}
-      <main className="flex-1 w-full pt-20 md:pt-32 pb-24 lg:pb-16 px-4 md:px-10 max-w-[1600px] mx-auto animate-in fade-in duration-500">
-        <div className="h-full">
-          {children}
-        </div>
+      {/* Main Container - Removido animate-in e div intermediária para evitar novos contextos de empilhamento */}
+      <main className="flex-1 w-full pt-20 md:pt-32 pb-24 lg:pb-16 px-4 md:px-10 max-w-[1600px] mx-auto overflow-y-auto">
+        {children}
       </main>
 
-      {/* Navegação Mobile com Glassmorphism */}
+      {/* Navegação Mobile */}
       <nav className="lg:hidden fixed bottom-4 left-4 right-4 h-16 bg-[#0a0a0a]/80 backdrop-blur-2xl border border-white/10 rounded-2xl z-[60] flex items-center justify-around px-2 shadow-2xl">
         {navItems.map((item) => (
           <button
