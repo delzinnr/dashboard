@@ -150,9 +150,11 @@ export const Layout: React.FC<LayoutProps> = ({
         </div>
       </header>
 
-      {/* Main Container - Removido animate-in e div intermediária para evitar novos contextos de empilhamento */}
+      {/* Main Container - Removido animate-in para evitar criação de novo Stacking Context */}
       <main className="flex-1 w-full pt-20 md:pt-32 pb-24 lg:pb-16 px-4 md:px-10 max-w-[1600px] mx-auto overflow-y-auto">
-        {children}
+        <div className="h-full">
+          {children}
+        </div>
       </main>
 
       {/* Navegação Mobile */}
